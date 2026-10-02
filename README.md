@@ -1,18 +1,35 @@
 # workshop 3 - PCAP file analysis
 
+collaborative / solo workshop
+
+## Scenario:
+
+as a newfound cybersecurity agent you've been called to an organization over a distressing situation where there's been a software attack. after briefly chatting with the employees, you realize they aren't too knowledgeable with online safety. you fish around the drives and also see that the files has been encrypted.
+
+with the tool being made today, we'll use it to fish for what where, when and why the issue came to be
+
+
 ## TASKS (2 parts):
 - Part 1: develop a tool to effectively oversee Packet Capture files (PCAP) and detect threats.
 
 - Part 2: provide constant overall software tool improvements by using GIT / GITHUB
+
 
 - Extra Cred: workshop 1 - integrate workshop 1's reconnaissance tool with today's activity for A multipurpose use 
 
 development summary:
 to automate tools - a Web Hub with information- identity correlation - GITHUB implementation
 
-__PART 1__
-requirements:
--tool made with Python
+## __PART 1__
+
+## project structure
+### recon.py (PCAP reader and decoder)
+
+responsible for:
+- .pcap / .pcapng file turns into recorded to becomes a raw frame 
+
+
+
 
 
 
