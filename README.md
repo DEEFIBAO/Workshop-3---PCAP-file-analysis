@@ -19,19 +19,38 @@ with the tool being made today, we'll use it to fish for what where, when and wh
 
 ## __PART 1__ (predicted 1 hr duration)
 
-step 1: download the File, should contain the following:
-
+step 1: download the File "pcap-workshop", should contain the following:
 ```text
 pcap-workshop/
 ├── ready_made/      reader.py + server.py, already working (nobody edits these)
-├── your_code/       the 5 detectors + analyzer, decide who's doing which file with your group
+├── your_code/       the 5 detectors + analyzer, decide who's doing which file with your group 
 ├── web/             index.html, the web page the group finishes (free too modify it to distinctify )
 ├── samples/         the two test captures
 ├── start.py         runs the website:   python start.py
 ├── check.py         tests people's work: python check.py
 └── README.md        setup and Git instructions for the group
 ```
+inside the "your code" sub-folder is where the modules are to be located and modified in. The group / individual would decide on what they'd want to target and develop. "your code" holds 6 modules to be downloaded and opened (each holds their own rules written at the top) and modified heres what you'll see:
+```text
+├── detect_portscan.py     
+├── detect_cleartext.py             
+├── detect_dns.py       
+├── detect_ports.py        
+├── analyzer.py         
+└── detect_bruteforce.py        
+```
+note: ignore "__init__.py" as this tells python that the folder is a package
 
+step 2: use github and create your own repo:
+
+
+
+
+
+once all modules are completed, the group can use "check.py" to test if it functions as expected and move onto other activities
+
+
+step 2:
 
 ## __PART 2__ (predicted 45min duration)
 
