@@ -19,7 +19,7 @@ with the tool being made today, we'll use it to fish for what where, when and wh
 
 ## __PART 1__ (predicted 1 hr duration)
 
-step 1: download the File "pcap-workshop", should contain the following:
+### step 1: download the File "pcap-workshop", should contain the following:
 ```text
 pcap-workshop/
 ├── ready_made/      reader.py + server.py, already working (nobody edits these)
@@ -41,7 +41,7 @@ inside the "your code" sub-folder is where the modules are to be located and mod
 ```
 note: ignore "__init__.py" as this tells python that the folder is a package
 
-step 2: use github and create your own repo:
+### step 2: use github and create your own repo:
 
 
 
@@ -50,7 +50,7 @@ step 2: use github and create your own repo:
 once all modules are completed, the group can use "check.py" to test if it functions as expected and move onto other activities
 
 
-step 2:
+step 3:
 
 ## __PART 2__ (predicted 45min duration)
 
