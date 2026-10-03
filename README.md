@@ -10,25 +10,30 @@ with the tool being made today, we'll use it to fish for what where, when and wh
 
 
 ## TASKS (2 parts):
-- Part 1: develop a tool to effectively oversee Packet Capture files (PCAP) and detect threats.
+- Part 1: develop a tool to effectively oversee Packet Capture files (PCAP) and detect threats. 
 
-- Part 2: provide constant overall software tool improvements by using GIT / GITHUB
+- Part 2: provide constant overall software tool improvements by using GIT / GITHUB (predicted 45 min duration)
 
 
 - Extra Cred: workshop 1 - integrate workshop 1's reconnaissance tool with today's activity for A multipurpose use 
 
-development summary:
-to automate tools - a Web Hub with information- identity correlation - GITHUB implementation
+## __PART 1__ (predicted 1 hr duration)
 
-## __PART 1__
+step 1: download the File, should contain the following:
 
-## project structure
-### recon.py (PCAP reader and decoder)
+```text
+pcap-workshop/
+├── ready_made/      reader.py + server.py, already working (nobody edits these)
+├── your_code/       the 5 detectors + analyzer, decide who's doing which file with your group
+├── web/             index.html, the web page the group finishes (free too modify it to distinctify )
+├── samples/         the two test captures
+├── start.py         runs the website:   python start.py
+├── check.py         tests people's work: python check.py
+└── README.md        setup and Git instructions for the group
+```
 
-responsible for:
-- .pcap / .pcapng file turns into recorded to becomes a raw frame 
 
-
+## __PART 2__ (predicted 45min duration)
 
 
 
