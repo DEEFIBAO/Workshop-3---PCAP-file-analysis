@@ -1,0 +1,77 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>PCAP Sentinel</title>
+  <!--
+    W - The web page.
+    Start the server from the main folder (python start.py) and open http://127.0.0.1:8000
+
+    YOUR JOB: finish the show(report) function at the bottom.
+    Until the join, the Analyse button loads a made-up report from /api/demo,
+    so you can build everything without waiting for anyone.
+  -->
+  <style>
+    body { font-family: system-ui, "Segoe UI", sans-serif; max-width: 900px; margin: 40px auto; padding: 0 16px; color: #16191c; background: #f5f6f3; }
+    h1 { margin-bottom: 4px; }
+    form { display: flex; gap: 8px; flex-wrap: wrap; align-items: center; background: #fff; padding: 14px; border-radius: 10px; border: 1px solid #dcdfe2; }
+    button { padding: 8px 16px; border: 0; border-radius: 6px; background: #2463c0; color: #fff; font-weight: 600; cursor: pointer; }
+    #summary { margin: 20px 0; font-size: 18px; }
+    table { width: 100%; border-collapse: collapse; background: #fff; }
+    th, td { text-align: left; padding: 8px 10px; border-bottom: 1px solid #dcdfe2; }
+    th { background: #eef0f2; font-size: 13px; text-transform: uppercase; letter-spacing: .05em; }
+    /* BONUS: give rows a class of "high" or "medium" to colour them */
+    tr.high td { background: #fbe5df; }
+    tr.medium td { background: #fbf1d6; }
+  </style>
+</head>
+<body>
+  <h1>PCAP Sentinel</h1>
+  <p>Upload a packet capture to look for attacks.</p>
+
+  <form id="form">
+    <input type="file" id="file" accept=".pcap,.pcapng">
+    <button type="submit">Analyse</button>
+  </form>
+
+  <div id="summary"></div>
+
+  <table>
+    <thead><tr><th>Severity</th><th>Alert</th><th>From</th><th>To</th><th>Detail</th></tr></thead>
+    <tbody id="alerts"></tbody>
+  </table>
+
+  <script>
+    document.getElementById('form').addEventListener('submit', async (event) => {
+      event.preventDefault();
+
+      // BEFORE THE JOIN: use the made-up demo report
+      const res = await fetch('/api/demo');
+
+      // AT THE JOIN: delete the line above and un-comment these three lines
+      // const body = new FormData();
+      // body.append('file', document.getElementById('file').files[0]);
+      // const res = await fetch('/api/analyze', { method: 'POST', body });
+
+      const report = await res.json();
+      show(report);
+    });
+
+    function show(report) {
+      // report looks like:
+      // { file: "...", packets: 11071, protocols: {TCP: 10179, ...}, risk_score: 100, alerts: [ ... ] }
+      // each alert: { detector, severity, title, src, dst, detail }
+
+      // TODO 1: put the file name, number of packets and risk score into #summary
+      //         hint: document.getElementById('summary').textContent = `...`
+
+      // TODO 2: empty the table, then add one row per alert
+      //         hint: const row = document.createElement('tr'); ...  cells with .textContent ...
+      //         tbody.appendChild(row)
+
+      // TODO 3: if there are no alerts, show one row saying "No threats found"
+    }
+  </script>
+</body>
+</html>
