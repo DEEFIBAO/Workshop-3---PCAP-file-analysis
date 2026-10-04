@@ -138,7 +138,7 @@ git clone git@github.com:owner-name/roup-project.git
 cd group-project
 ```
 
-### step 4: DEVELOP! get to developing... leave some pizza for me
+## Part 2: DEVELOP! get to developing... leave some pizza for me
 
 once all modules are completed, the group can use "check.py" to test if it functions as expected and move onto other activities
 
