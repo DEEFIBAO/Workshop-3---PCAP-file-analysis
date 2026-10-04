@@ -80,6 +80,7 @@ Get-Content $HOME\.ssh\id_ed25519.pub
    - (give it a nice name)
    - paste the line into "key"
    - click "Add SSH key"
+  
 6. test it, use the command: 
 ```text
 ssh -T git@github.com
@@ -99,7 +100,7 @@ on the Github site, to create a Repository, do the following:
   - click create repository
 
 
-<ins>add a file</ins>
+<ins>add a file through Github</ins>
  - open your repo on Github
  - Click add file -> upload files and then drag the files in
  - write a short commit message
@@ -120,13 +121,13 @@ git status
 
  ### step 3 invite your team!
 
- the owner to the repo does this once for each teammate 
+ <ins>the owner to the repo does this once for each teammate: </ins>
  - open the repo on github and the click settings tab
  - under "access" click collaborators (Github may ask for a passsword)
  - click "add people" and type teammates username
  - click "add name to repo" and they'll get an invite
 
-for the teammates to do be connected:
+<ins>for the teammates to do be connected:</ins>
  - accept the invitation email
  - open the repo on github, click the green "code" button -> SSH tab and copy the address
  - in the terminal where you want the file (e.g your documents folder) do the following:
