@@ -16,7 +16,9 @@ with the tool being made today, we'll use it to fish for what where, when and wh
 
 - LO2 provide constant overall software tool improvements by using GIT / GITHUB (predicted 45 min duration)
   
-- Extra Cred: workshop 1 - integrate workshop 1's reconnaissance tool with today's activity for A multipurpose use 
+- Extra Cred: workshop 1 - integrate workshop 1's reconnaissance tool with today's activity for A multipurpose use
+
+
 
 ## __PART 1__ (predicted 1 hr duration)
 
@@ -48,7 +50,7 @@ To tie this in with the use of git, the file would be pushed onto GitHub for eve
 
 users must have a GitHub account, use this URL to log in/sign up (using your school email gives access to the GitHub Dev pack):
 
-<ins>get set up (everyone, once)</ins>
+<ins> (CLI route) get set up (everyone, once)</ins>
 1. check if GIT is already installed with "git --version" on a power shell terminal (if you see Git version X.XX.X __skip the next step as its installed__)
 2. as GIT is missing, download it from  git-scm.com/download/win and accept the default options or
 ```text
@@ -106,7 +108,7 @@ on the Github site, to create a Repository, do the following:
  - write a short commit message
  - click commit changes
 
-<ins>add a file through terminal</ins>
+<ins>(CLI route)add a file through terminal</ins>
  - put the file in your project folder
  - -check that git status has noticed it with
 ```text
@@ -129,8 +131,8 @@ git status
 
 <ins>for the teammates to do be connected:</ins>
  - accept the invitation email
- - open the repo on github, click the green "code" button -> SSH tab and copy the address
- - in the terminal where you want the file (e.g your documents folder) do the following:
+ - (CLI route) open the repo on github, click the green "code" button -> SSH tab and copy the address
+ - (CLI route) in the terminal where you want the file (e.g your documents folder) do the following:
 ```text
 git clone git@github.com:owner-name/roup-project.git
 ```
