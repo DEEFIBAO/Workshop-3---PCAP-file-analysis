@@ -1,307 +1,351 @@
+![SCA Student Computing Association logo](https://media.licdn.com/dms/image/v2/D4E22AQG76kA0aGcpMw/feedshare-shrink_480/B4EZ4CUGyDJcAk-/0/1778155286118?e=1792627200&v=beta&t=4pxQzB73I5JCSVvfKFKoq2Xu1iIVxGCxlnpZYaWJG-Q)
 
-# Workshop 3 – PCAP File Analysis
+# 🛡️ Workshop 3 – PCAP File Analysis
 
-*Collaborative or solo workshop*
+![Duration](https://img.shields.io/badge/duration-~2_hours-2463c0)
+![Level](https://img.shields.io/badge/level-beginner_friendly-2e7d32)
+![Python](https://img.shields.io/badge/python-3.x-f2c94c)
+![Format](https://img.shields.io/badge/format-group_or_solo-8e44ad)
 
-## Scenario
+*Build a tool that reads network traffic and finds the attacks hiding inside it.*
 
-As a newly hired cybersecurity agent, you've been called to an organisation after a software attack. After chatting with the employees, you realise they don't know much about online safety. You look around the drives and find that the files have been encrypted.
+> 📘 **New here? Follow the [step-by-step Participant Guide](GUIDE.md).** It walks you through preparation, every step of the workshop, and solving the case.
 
-Using the tool you build today, you'll dig through the network traffic to find out **what** happened, **where**, **when** and **why**.
+---
 
-## Tasks
+## 🕵️ Scenario
 
-| | Task | Time |
-|---|---|---|
-| **LO1** | Build a tool that reads packet capture (PCAP) files and detects threats | ~1 hr |
-| **LO2** | Keep improving the tool as a team using Git / GitHub | ~45 min |
-| ⭐ **Extra credit** | Combine Workshop 1's reconnaissance tool with today's tool for a multipurpose tool | – |
+You're a newly hired cybersecurity agent, called in after an attack on an organisation. The staff don't know much about online safety, and when you look around the drives, the files have been **encrypted**.
+
+The only evidence left is a recording of the network traffic: a **packet capture (PCAP)**. Today you'll build **PCAP Sentinel**, a tool that digs through that recording and tells you **what** happened, **where**, **when** and **who** did it.
+
+---
+
+## 🎯 Learning objectives
+
+| | Objective | Time |
+|:-:|---|:-:|
+| **LO1** | Build a tool that reads packet captures and detects threats | ~1 hr |
+| **LO2** | Improve the tool as a team, sharing work with Git and GitHub | ~45 min |
+| ⭐ | **Extra credit:** combine Workshop 1's reconnaissance tool with today's tool | – |
+
+**By the end you'll be able to:**
+- explain what a packet, a port and a PCAP file are
+- spot the patterns behind port scans, password guessing, malware and website attacks
+- turn a pattern into Python code that raises an alert
+- work on one project with other people without overwriting each other's work
+
+---
+
+## 🧭 How it works
+
+```mermaid
+flowchart LR
+    A["📦 .pcap file"] --> B["📖 reader.py<br/>turns it into packets"]
+    B --> C["🔍 detectors<br/>one per attack type"]
+    C --> D["🧩 analyzer.py<br/>joins the alerts, scores the risk"]
+    D --> E["🖥️ website<br/>shows the results"]
+    style C fill:#fdecc8,stroke:#d4a017
+    style D fill:#fdecc8,stroke:#d4a017
+```
+
+The 🟨 **yellow** parts are what you build. Everything else is ready-made and already works.
 
 ---
 
 ## 🧭 Choose your route
 
-Every step that differs is labelled with one of these two routes. **Pick one and only follow the steps for your route.** Steps with no label are for everyone.
-
-| | 🌐 **Browser route** | 💻 **Command line route** |
+| | 🌐 **Browser route** *(recommended)* | 💻 **Own computer route** |
 |---|---|---|
-| **Best for** | Beginners, school / locked-down PCs, nothing to install | People comfortable with a terminal who want to work on their own machine |
-| **You need** | A GitHub account and a web browser | A GitHub account, Git and Python 3 installed |
-| **Where you code** | GitHub Codespaces (VS Code in the browser) | Your own editor (e.g. VS Code) |
-| **How you share work** | Buttons in GitHub / Codespaces | `git add`, `git commit`, `git push` |
+| **Best for** | Beginners, school or locked-down PCs | People comfortable with a terminal |
+| **You need** | A GitHub account and a browser | A GitHub account and Python 3 |
+| **You code in** | GitHub Codespaces (VS Code in your browser) | Your own editor (e.g. VS Code) |
+| **Nothing to install?** | ✅ Yes | ❌ Python (and optionally Git) |
 
-> Not sure? **Pick the browser route.** You can switch to the command line later; the code is the same either way.
+> Not sure? **Pick the browser route.** The code is the same either way.
 
 ---
 
-## Part 1 – Set up (≈ 1 hr)
+## 🛠️ Part 1 – Set up *(≈ 15 min)*
 
-### Step 1: Know what's in the project
+### Step 1 · Create a GitHub account *(everyone)*
 
-The `pcap-workshop` folder contains:
+Sign up at [github.com/signup](https://github.com/signup).
+> 💡 Use your **school email** to unlock the free [GitHub Student Developer Pack](https://education.github.com/pack).
+
+### Step 2 · Make the group's copy *(one person, the organiser)*
+
+1. On this repo, click **Fork** → **Create fork**. That copy is now your group's repo.
+2. Open it → **Settings** → **Collaborators** → **Add people**, and invite each teammate.
+
+**Teammates:** accept the invite (email or 🔔 on GitHub), then open the **organiser's** repo.
+
+### Step 3 · Open the project
+
+<table>
+<tr><th>🌐 Browser route</th><th>💻 Own computer route</th></tr>
+<tr valign="top"><td>
+
+1. On the group's repo: green **Code** button → **Codespaces** → **Create codespace on main**.
+2. Wait a minute. Everything installs itself.
+3. In the terminal at the bottom, type:
+   ```bash
+   cd pcap-workshop
+   python go.py
+   ```
+
+</td><td>
+
+1. Install [Python 3](https://www.python.org/downloads/). On Windows, tick **"Add Python to PATH"**.
+2. Get the repo: **Code** → **Download ZIP**, or clone it (see *Command line setup* below).
+3. Open the `pcap-workshop` folder and double-click **`GO.bat`** (or type `python go.py`).
+
+</td></tr>
+</table>
+
+**You should see** a scoreboard (every line says `--` for now), then the website opens. 🎉
+
+### Step 4 · Pick a file *(everyone)*
+
+Each person takes **one** file in `pcap-workshop/your_code/`. Decide as a group who does what.
+
+| Who | File | What it catches | Difficulty |
+|:-:|---|---|:-:|
+| D1 | `detect_portscan.py` | 🚪 One machine knocking on lots of ports | ⭐ |
+| D2 | `detect_bruteforce.py` | 🔑 Password guessing (logins and websites) | ⭐⭐⭐ |
+| D3 | `detect_dns.py` | 🌐 Lookups for names that don't exist | ⭐⭐ |
+| D4 | `detect_cleartext.py` | 👀 Passwords anyone can read | ⭐⭐ |
+| D5 | `detect_ports.py` | 🦠 Traffic to known malware ports | ⭐ |
+| D6 | `detect_web.py` | 🕸️ Website attacks (probing, SQL injection) | ⭐⭐⭐ |
+| A | `analyzer.py` | 🧩 Joins everything into one report | ⭐⭐ |
+
+> Fewer than 7 people? Start with D1, D2 and A, then pick up the rest. Working solo? Go in that order.
+
+---
+
+## 💻 Part 2 – Develop! *(≈ 1 hr, and leave some pizza for me 🍕)*
+
+### Inside your file
+
+Every file in `your_code/` looks like this:
+
+| Section | What it tells you |
+|---|---|
+| **THE RULE** | Exactly what to detect, and when to raise an alert |
+| **HINT** | A nudge towards the code |
+| **TEST IT** | The command to run and the results to expect |
+| **IDEAS** | Extra things to detect once your rule works ✨ |
+| `# TODO` | Where your code goes |
+
+Every detector follows the same pattern: **loop over the packets and take notes, then decide.**
+
+### Test as you go
+
+| I want to... | Type |
+|---|---|
+| Test **my** file | `python check.py portscan` *(or bruteforce, dns, cleartext, ports, web, analyzer)* |
+| See the whole group's progress | `python check.py` |
+| Open the website | `python start.py` → [127.0.0.1:8000](http://127.0.0.1:8000) |
 
 ```text
-pcap-workshop/
-├── ready_made/      reader.py + server.py – already working (nobody edits these)
-├── your_code/       the 5 detectors + analyzer – decide with your group who does which file
-├── web/             index.html – the web page the group finishes (feel free to make it your own)
-├── samples/         two test captures (one with attacks, one clean)
-├── start.py         runs the website:     python start.py
-├── check.py         tests everyone's work: python check.py
-└── README.md        setup and Git instructions for the group
+[OK] portscan    1 on attack-demo.pcap, 0 on compsoc-incident.pcap, none on the clean one
+[--] dns         not started yet (returns no alerts)
+[X ] cleartext   2 alert(s) on compsoc-incident.pcap, expected 1
 ```
 
-The `your_code` folder is where you work. Each file has its own rules written at the top:
+`OK` = working · `--` = not started · `X` = needs fixing *(it tells you why)*
 
-```text
-your_code/
-├── detect_portscan.py     D1  port scans
-├── detect_bruteforce.py   D2  password guessing
-├── detect_dns.py          D3  suspicious DNS
-├── detect_cleartext.py    D4  unencrypted passwords
-├── detect_ports.py        D5  malware ports
-└── analyzer.py            A   joins all the detectors into one report
+> 🌐 **In Codespaces:** when the website starts, click **Open in Browser** on the pop-up (or use the **Ports** tab).
+> Click **Demo data** on the website to see made-up results before your code is ready.
+
+### The evidence
+
+| Capture | What's inside | A finished tool finds |
+|---|---|:-:|
+| `attack-demo.pcap` | A network under attack: scan, brute force, malware, DNS tricks | **8 alerts** · risk 100 |
+| `compsoc-incident.pcap` | A website break-in: probing, password guessing, SQL injection | **4 alerts** · risk 68 |
+| `clean-traffic.pcap` | Normal everyday traffic | **0 alerts** · risk 0 |
+
+### ✅ Finished when
+
+- [ ] `python check.py` shows **OK** on every line
+- [ ] `attack-demo.pcap` on the website shows **8 alerts, risk score 100**
+- [ ] `compsoc-incident.pcap` on the website shows **4 alerts, risk score 68**
+
+<img width="633" alt="Screenshot of the finished PCAP Sentinel tool" src="https://github.com/user-attachments/assets/cc1231f2-07d7-4311-8dc9-0611baecb4b7" />
+
+### 🚀 Finished early?
+
+- **Level up your file:** pick something from its **IDEAS** list.
+- **Invent a detector:** copy `TEMPLATE_new_detector.py` to `detect_something.py`, then write your rule. It appears on the website automatically, and `python check.py something` tests it.
+- **Restyle the website:** `web/index.html` is yours to make your own.
+- **Check your work in Wireshark:** open a sample in [Wireshark](https://www.wireshark.org/) and find the attack yourself (see *Wireshark filters* below).
+
+---
+
+## 🔀 LO2 – Teamwork with Git *(≈ 45 min)*
+
+Git keeps the history of every change, so the group can build one tool together.
+
+```mermaid
+gitGraph
+    commit id: "workshop files"
+    branch you
+    commit id: "port scan works"
+    checkout main
+    branch teammate
+    commit id: "DNS works"
+    checkout main
+    merge you id: "you push"
+    merge teammate id: "teammate pushes"
+    commit id: "everyone pulls"
 ```
 
-> Ignore `__init__.py` – it just tells Python the folder is a package.
+Each person works on their own copy, then **pushes** it to GitHub. **Pulling** brings everyone's work back together.
 
-### Step 2: Create a GitHub account (everyone)
+> ✋ **Golden rule:** only edit **your own file**. If two people never change the same file, nobody's work gets overwritten.
 
-Sign up or log in at [github.com](https://github.com). Using your **school email** gives you access to the [GitHub Student Developer Pack](https://education.github.com/pack), which includes free Codespaces hours.
+| To... | 🌐 Codespaces | 🖥️ GitHub Desktop | 💻 Command line |
+|---|---|---|---|
+| **Get** everyone's work | Source Control → **Sync Changes** | **Fetch** → **Pull** | `git pull` |
+| **Share** your work | Source Control → message → **Commit** → **Sync Changes** | Summary → **Commit** → **Push** | `git add your_code/detect_dns.py`<br>`git commit -m "DNS done"`<br>`git push` |
 
-### Step 3: Set up your tools
+> 💡 Always **get** before you start and before you share.
 
-<details open>
-<summary><b>🌐 Browser route</b> – nothing to install</summary>
+**The join (0:35):** everyone shares their work, then one person gets everyone's work and runs `python check.py` for the whole group to see.
+
+---
+
+## 📚 FYI
+
+<details>
+<summary><b>📖 Jargon buster</b></summary>
 
 <br>
 
-Nothing to do here! Codespaces already has Git and Python. Skip to **Step 4**.
+| Word | Meaning |
+|---|---|
+| **Packet** | A small chunk of data sent across a network, like one envelope in a stream of post |
+| **PCAP** | A recording of packets, made with a tool like Wireshark (*Packet CAPture*) |
+| **IP address** | A computer's address on the network, e.g. `192.168.1.30` |
+| **Port** | A numbered "door" on a computer. Each service has its own, e.g. 22 = SSH, 80 = websites |
+| **SYN** | The first packet of a conversation: *"can we talk?"* |
+| **DNS** | The internet's phone book: turns `example.com` into an IP address |
+| **HTTP / HTTPS** | How websites are sent. HTTP is readable by anyone; HTTPS is encrypted |
+| **Brute force** | Guessing passwords over and over until one works |
+| **SQL injection** | Typing database commands into a form to trick a website |
+| **Repo** | A project folder stored on GitHub |
+| **Commit / Push / Pull** | Save a change / send it to GitHub / get everyone else's changes |
 
 </details>
 
 <details>
-<summary><b>💻 Command line route</b> – install Git and connect it to GitHub (once per computer)</summary>
+<summary><b>🦈 Wireshark filters to find the attacks yourself</b></summary>
 
 <br>
 
-**a) Install Git and Python**
+| To see... | Type this in Wireshark's filter bar |
+|---|---|
+| Port scan knocks | `tcp.flags.syn == 1 && tcp.flags.ack == 0` |
+| SSH login attempts | `tcp.dstport == 22 && tcp.flags.syn == 1` |
+| Website logins | `http.request.method == "POST"` |
+| Failed website logins | `http.response.code == 401` |
+| Names that don't exist | `dns.flags.rcode == 3` |
+| Cleartext passwords | `ftp.request.command == "PASS" \|\| http contains "password="` |
+| Malware port traffic | `tcp.port == 4444` |
 
-1. Open PowerShell and check whether Git is installed:
-   ```powershell
-   git --version
-   ```
-   If you see `git version X.XX.X`, skip to step 3.
-2. Install Git, either from [git-scm.com/download/win](https://git-scm.com/download/win) (accept the default options) or with:
-   ```powershell
-   winget install --id Git.Git -e
-   ```
-3. Install **Python 3** from [python.org](https://www.python.org/downloads/). On Windows, tick **"Add Python to PATH"**.
+Right-click a packet → **Follow → TCP Stream** to read a whole conversation.
 
-**b) Tell Git who you are**
+</details>
 
+<details>
+<summary><b>📁 What's in the folder</b></summary>
+
+<br>
+
+```text
+pcap-workshop/
+├── ready_made/      ⛔ don't edit: reads captures, runs the website, finds your detectors
+├── your_code/       ✏️ the group's files (one each) + TEMPLATE_new_detector.py
+├── web/             🎨 index.html: the web page, restyle it if you like
+├── samples/         🧪 three test captures
+├── check.py         ✅ tests everyone's work
+├── start.py         🖥️ starts the website
+└── go.py / GO.bat   🚀 install + test + open the website in one go
+```
+
+> Ignore `__init__.py`: it just tells Python the folder is a package.
+
+</details>
+
+<details>
+<summary><b>🔧 Something's not working</b></summary>
+
+<br>
+
+| Problem | Fix |
+|---|---|
+| `python` not recognised | Try `py` instead, or reinstall Python with **"Add to PATH"** ticked |
+| `No module named scapy` / `flask` | Run `python go.py`: it installs them |
+| A warning about **libpcap** on Windows | Normal and harmless, ignore it |
+| The website shows nothing new | Press **Ctrl + F5**, and check `python start.py` is still running |
+| A "Detector crashed" row on the website | The detail says which file and line broke. Fix it and save |
+
+Still stuck? A technical coordinator will help.
+
+</details>
+
+<details>
+<summary><b>💻 Command line setup (Git + SSH key)</b></summary>
+
+<br>
+
+**1. Install Git and say who you are**
 ```powershell
+git --version                      # prints a version if Git is installed
+winget install --id Git.Git -e     # otherwise install it (or use git-scm.com/download/win)
 git config --global user.name "Your Name"
 git config --global user.email "you@example.com"
 git config --global init.defaultBranch main
 ```
 
-**c) Create an SSH key so GitHub knows a push really came from you**
+**2. Connect to GitHub with an SSH key**
 
-A key comes in two halves: a **private** half that stays on your computer, and a **public** half you give to GitHub.
-
-1. Make the key (press Enter to accept the defaults):
-   ```powershell
-   ssh-keygen -t ed25519 -C "you@example.com"
-   ```
-2. Show the public half and copy the whole line (it starts with `ssh-ed25519` and ends with your email):
-   ```powershell
-   Get-Content $HOME\.ssh\id_ed25519.pub
-   ```
-3. Add it to GitHub: profile picture → **Settings** → **SSH and GPG keys** → **New SSH key** → give it a name → paste the line into **Key** → **Add SSH key**.
-4. Test it:
-   ```powershell
-   ssh -T git@github.com
-   ```
-   Type `yes` if asked. You should see: `Hi your-username! You've successfully authenticated...`
-
-> 🔒 **Never share the private half** (the file *without* `.pub`). Anyone with it can push as you.
-
-If your group gets stuck with Git, a technical coordinator will help.
-
-</details>
-
-### Step 4: Create the group repository (one person – the organiser)
-
-The organiser creates the repo and uploads the `pcap-workshop` files so everyone can work from the same copy.
-
-1. On GitHub, click **+** (top right) → **New repository**.
-2. Give it a name (no spaces – use hyphens, e.g. `pcap-group-3`).
-3. Choose **Public** (anyone can see it) or **Private** (only you and people you invite).
-4. Tick **Add a README**, then click **Create repository**.
-
-Then add the workshop files:
-
-<details open>
-<summary><b>🌐 Browser route</b></summary>
-
-<br>
-
-1. Open your new repo → **Add file** → **Upload files**.
-2. Drag in the **contents** of the `pcap-workshop` folder.
-3. Write a short commit message (e.g. `Add workshop files`) → **Commit changes**.
-
-</details>
-
-<details>
-<summary><b>💻 Command line route</b></summary>
-
-<br>
-
-1. On the repo page, click the green **Code** button → **SSH** tab → copy the address.
-2. Clone it, copy the workshop files in, and push:
-   ```powershell
-   git clone git@github.com:your-username/your-repo.git
-   cd your-repo
-   # copy the contents of pcap-workshop into this folder, then:
-   git add .
-   git commit -m "Add workshop files"
-   git push
-   ```
-
-</details>
-
-### Step 5: Invite your team
-
-**The organiser** does this once for each teammate:
-
-1. Open the repo → **Settings** tab → **Collaborators** (under *Access*). GitHub may ask for your password.
-2. Click **Add people**, type your teammate's username, and send the invite.
-
-**Each teammate** accepts the invite from their email or GitHub notifications, then gets their own copy:
-
-<details open>
-<summary><b>🌐 Browser route</b></summary>
-
-<br>
-
-1. Open the repo → green **Code** button → **Codespaces** tab → **Create codespace on main**.
-2. Wait for VS Code to load in your browser. You now have the project, a terminal and Python.
-3. In the terminal at the bottom, install the requirements:
-   ```bash
-   pip install -r requirements.txt
-   ```
-
-> 💡 To come back later, go to [github.com/codespaces](https://github.com/codespaces) and reopen the same codespace – don't create a new one each time.
-
-</details>
-
-<details>
-<summary><b>💻 Command line route</b></summary>
-
-<br>
-
-1. Open the repo → green **Code** button → **SSH** tab → copy the address.
-2. In PowerShell, go to where you want the project (e.g. Documents) and run:
-   ```powershell
-   git clone git@github.com:owner-name/group-project.git
-   cd group-project
-   pip install -r requirements.txt
-   ```
-
-</details>
-
----
-
-## Part 2 – Develop! (get coding… and leave some pizza for me 🍕)
-
-### Run and test your code
-
-These commands work the same in both routes – in Codespaces, type them in the terminal at the bottom of the screen.
-
-| What | Command |
-|---|---|
-| Check the reader works (should say `11071 packets`) | `python check.py reader` |
-| Test **your** detector | `python check.py portscan` *(or `bruteforce`, `dns`, `cleartext`, `ports`, `analyzer`)* |
-| See the whole group's progress | `python check.py` |
-| Run the website | `python start.py` |
-
-When you run the website:
-- 🌐 **Browser route:** Codespaces shows a pop-up – click **Open in Browser** (or use the **Ports** tab next to the terminal).
-- 💻 **Command line route:** open [http://127.0.0.1:8000](http://127.0.0.1:8000).
-
-`OK` = working, `--` = not started, `X` = needs fixing (it tells you why).
-
-### Share your work and get everyone else's
-
-> ✋ **Only edit your own file.** If two people never change the same file, Git never has a conflict.
-
-<details open>
-<summary><b>🌐 Browser route</b> (in Codespaces)</summary>
-
-<br>
-
-**To share your work:**
-1. Click the **Source Control** icon in the left sidebar (the branching-lines icon).
-2. Type a short message, e.g. `DNS detector working`.
-3. Click **Commit**, then **Sync Changes**.
-
-**To get everyone else's work:** in Source Control, click **Sync Changes** (or the `↻` icon in the bottom bar).
-
-*Quick fix without Codespaces:* open your file on github.com → ✏️ pencil icon → edit → **Commit changes**.
-
-</details>
-
-<details>
-<summary><b>💻 Command line route</b></summary>
-
-<br>
-
-**To share your work:**
+A key has a **private** half (stays on your computer) and a **public** half (given to GitHub).
 ```powershell
-git status                              # see what you changed
-git add your_code/detect_dns.py         # mark your file to be saved
-git commit -m "DNS detector working"    # save it with a message
-git push                                # send it to GitHub
+ssh-keygen -t ed25519 -C "you@example.com"     # press Enter for the defaults
+Get-Content $HOME\.ssh\id_ed25519.pub           # copy the line this prints
+```
+On GitHub: profile picture → **Settings** → **SSH and GPG keys** → **New SSH key** → paste → **Add SSH key**. Then test it:
+```powershell
+ssh -T git@github.com     # type "yes"; you should see "Hi your-username!"
+```
+> 🔒 Never share the private half (the file *without* `.pub`).
+
+**3. Get the group's repo**
+```powershell
+git clone git@github.com:owner-name/Workshop-3---PCAP-file-analysis.git
+cd Workshop-3---PCAP-file-analysis/pcap-workshop
+python go.py
 ```
 
-**To get everyone else's work:**
-```powershell
-git pull
-```
-
-> Tip: always `git pull` before you start working and before you push.
-
 </details>
 
-### ✅ Finished when
+<details>
+<summary><b>❓ What are Git and GitHub?</b></summary>
 
-`python check.py` shows `OK` on every line, and uploading `samples/attack-demo.pcap` on the web page shows **8 alerts, risk score 100**.
+<br>
 
-<img width="633" height="629" alt="Screenshot of the finished PCAP tool" src="https://github.com/user-attachments/assets/cc1231f2-07d7-4311-8dc9-0611baecb4b7" />
-
----
-
-## FYI
-
-### Websites and applications
-
-**Websites**
-- [GitHub](https://github.com) – stores repositories (the cool kids call them *repos*) online so people can share them.
-- [GitHub Codespaces](https://github.com/codespaces) – a coding workspace with Git and Python that runs in your browser.
-
-**Applications** (command line route only)
-- [Git](https://git-scm.com) – tracks changes to your files. Works the same on every OS; check with `git --version`.
-- [Python 3](https://www.python.org/downloads/) – runs the tool.
-
-### What are Git and GitHub?
-
-**Git** is an open-source version control system that tracks the entire history of changes made to files.
-
-**GitHub** is a cloud platform built on top of Git. It's a central hub where projects are stored, so lots of people can work on the same project at once without overwriting each other's work.
+**Git** is a version control system: it records the full history of changes to your files, so nothing gets lost.
+**GitHub** is a website built on Git. It stores projects online so lots of people can work on them at once.
+**Codespaces** is GitHub's editor in the browser, so you can do all of this without installing anything.
 
 ![Git version control guide](https://user-images.githubusercontent.com/14274827/91470661-9d5a8780-e8b2-11ea-9ccb-0d813d2e35d1.png)
 
-### Project keywords
+</details>
 
-`automation` · `tool development` · `digital forensics` · `networks` · `threat detection` · `GitHub`
+---
+
+### 🏷️ Project keywords
+
+`automation` · `tool development` · `digital forensics` · `networks` · `threat detection` · `Wireshark` · `GitHub`
