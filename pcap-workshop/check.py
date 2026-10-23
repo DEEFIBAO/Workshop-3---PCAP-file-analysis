@@ -2,10 +2,12 @@
 
   python check.py              check every piece and show a scoreboard
   python check.py portscan     check one piece and list the alerts it found
-                               (portscan, bruteforce, dns, cleartext, ports, analyzer, reader)
+                               (portscan, bruteforce, dns, cleartext, ports, web, analyzer, reader,
+                                or the name of your own detector: detect_xyz.py -> python check.py xyz)
 """
 import importlib
 import json
+import os
 import sys
 import traceback
 
@@ -13,14 +15,16 @@ from ready_made.reader import read_packets
 
 ATTACK = "samples/attack-demo.pcap"
 CLEAN = "samples/clean-traffic.pcap"
+INCIDENT = "samples/compsoc-incident.pcap"   # a second, different attack (website break-in)
 
-# name -> (module, how many alerts the attack sample should give: (at least, at most))
+# name -> (module, how many alerts each attack sample should give: (at least, at most))
 DETECTORS = {
-    "portscan": ("your_code.detect_portscan", (1, 1)),
-    "bruteforce": ("your_code.detect_bruteforce", (1, 1)),
-    "dns": ("your_code.detect_dns", (1, 2)),       # 2 if the bonus is done
-    "cleartext": ("your_code.detect_cleartext", (3, 3)),
-    "ports": ("your_code.detect_ports", (1, 1)),
+    "portscan": ("your_code.detect_portscan", {ATTACK: (1, 1), INCIDENT: (0, 0)}),
+    "bruteforce": ("your_code.detect_bruteforce", {ATTACK: (1, 1), INCIDENT: (1, 1)}),
+    "dns": ("your_code.detect_dns", {ATTACK: (1, 2), INCIDENT: (0, 0)}),   # 2 if the bonus is done
+    "cleartext": ("your_code.detect_cleartext", {ATTACK: (3, 3), INCIDENT: (1, 1)}),
+    "ports": ("your_code.detect_ports", {ATTACK: (1, 1), INCIDENT: (0, 0)}),
+    "web": ("your_code.detect_web", {ATTACK: (0, 0), INCIDENT: (2, 2)}),
 }
 ALERT_KEYS = {"detector", "severity", "title", "src", "dst", "detail"}
 SEVERITIES = {"high", "medium", "low"}
@@ -61,14 +65,24 @@ def problems_with(alerts):
     return sorted(set(found))
 
 
+def extra_detectors():
+    """Detectors people added themselves (any other your_code/detect_*.py)."""
+    from ready_made.loader import detector_names
+    known = {module.split(".")[-1] for module, _ in DETECTORS.values()}
+    return [n[len("detect_"):] for n in detector_names() if n not in known]
+
+
 def check_detector(name, verbose):
-    module_name, (low, high) = DETECTORS[name]
+    module_name, expected = DETECTORS.get(name, (f"your_code.detect_{name}", {}))
+    own = not expected   # someone's own detector: no fixed answer, just "works and stays quiet on clean"
+    samples = [p for p in (expected or {ATTACK: None, INCIDENT: None}) if os.path.exists(p)]
     try:
         module = importlib.import_module(module_name)
-        attack = module.detect(packets(ATTACK))
+        found = {path: module.detect(packets(path)) for path in samples}
         clean = module.detect(packets(CLEAN))
     except Exception:
         return "X ", f"crashed: {where_it_broke()}", []
+    attack = [a for path in samples for a in found[path]]
     issues = problems_with(attack) + problems_with(clean)
     if issues:
         return "X ", "; ".join(issues), attack
@@ -76,10 +90,15 @@ def check_detector(name, verbose):
         return "--", "not started yet (returns no alerts)", attack
     if clean:
         return "X ", f"{len(clean)} alert(s) on the CLEAN sample; it should give none", attack
-    if not low <= len(attack) <= high:
-        want = f"{low}" if low == high else f"{low}-{high}"
-        return "X ", f"{len(attack)} alert(s) on the attack sample, expected {want}", attack
-    return "OK", f"{len(attack)} alert(s) on the attack sample, none on the clean one", attack
+    counts = ", ".join(f"{len(found[p])} on {os.path.basename(p)}" for p in samples)
+    if own:
+        return "OK", f"(your own detector) {counts}, none on the clean one", attack
+    for path in samples:
+        low, high = expected[path]
+        if not low <= len(found[path]) <= high:
+            want = f"{low}" if low == high else f"{low}-{high}"
+            return "X ", f"{len(found[path])} alert(s) on {os.path.basename(path)}, expected {want}", attack
+    return "OK", f"{counts}, none on the clean one", attack
 
 
 def check_analyzer(verbose):
@@ -105,7 +124,7 @@ def check_analyzer(verbose):
 
 def main():
     which = sys.argv[1].lower() if len(sys.argv) > 1 else None
-    names = list(DETECTORS) + ["analyzer"]
+    names = list(DETECTORS) + extra_detectors() + ["analyzer"]
     if which not in (None, "reader", *names):
         print(f"Unknown piece '{which}'. Choose from: reader, {', '.join(names)}")
         return
@@ -117,7 +136,9 @@ def main():
         for one in p[:3]:
             print(one, "\n")
         return
-    packets(ATTACK), packets(CLEAN)
+    for path in (ATTACK, CLEAN, INCIDENT):
+        if os.path.exists(path):
+            packets(path)
     print()
 
     for name in ([which] if which else names):

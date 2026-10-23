@@ -9,7 +9,7 @@
 
 *Build a tool that reads network traffic and finds the attacks hiding inside it.*
 
-> 📘 **New here? Follow the [step-by-step Participant Guide](GUIDE.md).** It walks you through preparation, every step of the workshop, and solving the case.
+> 📘 **New here? Follow the [step-by-step Participant Guide](pcap-workshop/GUIDE.md).** It walks you through preparation, every step of the workshop, and solving the case.
 
 ---
 

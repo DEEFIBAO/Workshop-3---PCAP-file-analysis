@@ -6,3 +6,6 @@ venv/
 .idea/
 .DS_Store
 Thumbs.db
+
+# Organiser answers - keep them off GitHub
+organiser_solutions/
