@@ -1,0 +1,124 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1">
+<title>PCAP Sentinel</title>
+<style>
+:root{color-scheme:dark;--bg:#0a0f1c;--panel:#111a2e;--panel2:#0d1527;--line:#25324d;--text:#e6ecf8;--muted:#92a2bf;--accent:#6cc4ff;
+--high:#ff7b7b;--medium:#f6b956;--low:#7fd6a0;--info:#8aa4d6}
+*{box-sizing:border-box}body{margin:0;background:var(--bg);color:var(--text);font:15px/1.55 system-ui,"Segoe UI",sans-serif}
+main{max-width:1180px;margin:auto;padding:28px 18px 70px}h1{margin:0;font-size:1.8rem}h2{font-size:1.1rem;margin:0 0 12px}h3{margin:0}
+.muted{color:var(--muted)}.panel{background:var(--panel);border:1px solid var(--line);border-radius:14px;padding:18px;margin:14px 0}
+.upload{display:flex;gap:12px;flex-wrap:wrap;align-items:center}input[type=file]{padding:9px;background:var(--panel2);border:1px solid var(--line);border-radius:8px;color:var(--text);max-width:100%}
+button{background:var(--accent);color:#06233a;border:0;padding:10px 18px;border-radius:8px;font-weight:700;cursor:pointer}button:disabled{opacity:.55;cursor:wait}
+.grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(150px,1fr));gap:10px}.metric{background:var(--panel2);border:1px solid var(--line);border-radius:10px;padding:12px}
+.metric span{display:block;color:var(--muted);font-size:.8rem}.metric strong{display:block;font-size:1.3rem;overflow-wrap:anywhere}
+.cols{display:grid;grid-template-columns:repeat(auto-fit,minmax(310px,1fr));gap:14px}.cols .panel{margin:0}
+table{width:100%;border-collapse:collapse;font-size:.9rem}th,td{text-align:left;padding:7px 8px;border-bottom:1px solid var(--line);overflow-wrap:anywhere}th{color:var(--muted);font-weight:600}.wrap{overflow-x:auto}
+.finding{border:1px solid var(--line);border-left-width:5px;border-radius:10px;padding:14px 16px;margin:12px 0;background:var(--panel2)}
+.finding.High{border-left-color:var(--high)}.finding.Medium{border-left-color:var(--medium)}.finding.Low{border-left-color:var(--low)}.finding.Informational{border-left-color:var(--info)}
+.badges{display:flex;flex-wrap:wrap;gap:6px;margin:6px 0}.badge{border-radius:5px;padding:1px 8px;font-size:.78rem;border:1px solid var(--line);background:#16213a}
+.badge.High{color:var(--high)}.badge.Medium{color:var(--medium)}.badge.Low{color:var(--low)}.badge.Informational{color:var(--info)}
+.kv{display:grid;grid-template-columns:max-content 1fr;gap:3px 14px;font-size:.88rem;margin:8px 0}.kv dt{color:var(--muted)}.kv dd{margin:0;overflow-wrap:anywhere}
+.why{border-left:3px solid var(--line);padding-left:10px;color:#cdd7ea;margin:8px 0}ul.ev{margin:6px 0 6px 18px;padding:0}.rec{background:#10261f;border:1px solid #1e4a3a;border-radius:8px;padding:8px 10px;margin:8px 0}
+details{margin-top:6px}summary{cursor:pointer;color:var(--muted)}.mono{font-family:ui-monospace,Consolas,monospace;font-size:.82rem;overflow-wrap:anywhere}
+.obs{border-left:3px solid var(--info);padding:3px 10px;margin:6px 0}.obs.warning{border-left-color:var(--medium)}.hidden{display:none}.error{color:var(--high)}
+.filters{display:flex;gap:8px;flex-wrap:wrap;margin-bottom:6px}.filters button{background:#16213a;color:var(--text);border:1px solid var(--line);padding:5px 12px}.filters button.on{background:var(--accent);color:#06233a}
+svg.spark{width:100%;height:70px;display:block}.banner{border-radius:10px;padding:12px 14px;margin:10px 0;border:1px solid var(--line)}
+.banner.warn{border-color:var(--medium);background:#2a2213}.banner.bad{border-color:var(--high);background:#2a1616}
+</style>
+</head>
+<body><main>
+<header><h1>PCAP Sentinel</h1><p class="muted">Educational, rule-based PCAP analysis. Findings are indicators to verify, not proof.</p></header>
+<section class="panel">
+<h2>Analyse a capture</h2>
+<form id="upload-form" class="upload"><input type="file" id="pcap-file" accept=".pcap,.pcapng" required><button id="analyse-button" type="submit">Analyse PCAP</button></form>
+<div id="status" role="status" aria-live="polite" class="muted" style="margin-top:10px">Ready. Files are analysed locally and never executed.</div>
+</section>
+<div id="results" class="hidden">
+<section class="panel"><h2 id="headline"></h2><div class="grid" id="severity"></div><div id="banners"></div></section>
+<section class="panel"><h2>Capture summary</h2><div class="grid" id="overview"></div></section>
+<section class="panel"><h2>General observations</h2><p class="muted">Facts about the traffic itself — not alerts.</p><div id="observations"></div></section>
+<div class="cols">
+<section class="panel"><h2>Protocols</h2><div class="wrap"><table><thead><tr><th>Protocol</th><th>Packets</th><th>%</th></tr></thead><tbody id="protocols"></tbody></table></div></section>
+<section class="panel"><h2>Top sources</h2><div class="wrap"><table><thead><tr><th>IP</th><th>Packets</th><th>Bytes</th></tr></thead><tbody id="sources"></tbody></table></div></section>
+<section class="panel"><h2>Top destinations</h2><div class="wrap"><table><thead><tr><th>IP</th><th>Packets</th><th>Bytes</th></tr></thead><tbody id="destinations"></tbody></table></div></section>
+<section class="panel"><h2>Top service ports</h2><div class="wrap"><table><thead><tr><th>Port</th><th>Service</th><th>Packets</th></tr></thead><tbody id="ports"></tbody></table></div></section>
+<section class="panel"><h2>TCP behaviour</h2><div class="wrap"><table><tbody id="tcp"></tbody></table></div></section>
+<section class="panel"><h2>Busiest conversations</h2><div class="wrap"><table><thead><tr><th>Conversation</th><th>Pkts</th><th>Duration</th></tr></thead><tbody id="flows"></tbody></table></div></section>
+</div>
+<section class="panel"><h2>Traffic over time</h2><div id="rate"></div></section>
+<section class="panel"><h2>Security findings</h2>
+<p class="muted"><b>Severity</b> = how serious it would be if real. <b>Confidence</b> = how strongly the evidence supports it.
+<b>Observed</b> = a fact visible in the capture · <b>Indicator</b> = suspicious pattern · <b>Inferred</b> = attack type deduced from several indicators. Frame numbers match Wireshark.</p>
+<div class="filters" id="filters"></div><div id="findings"></div></section>
+<section class="panel"><h2>Detection coverage</h2><p class="muted">Every rule that ran, including those that found nothing.</p>
+<div class="wrap"><table><thead><tr><th>Rule</th><th>Category</th><th>Findings</th><th>Status</th><th>What it needs / limits</th></tr></thead><tbody id="rules"></tbody></table></div></section>
+<section class="panel"><h2>Limitations</h2><ul id="limitations"></ul></section>
+</div>
+</main>
+<script>
+const $=id=>document.getElementById(id);
+const esc=v=>String(v??"").replace(/[&<>"']/g,c=>({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;","'":"&#39;"}[c]));
+const num=v=>v===null||v===undefined?"Not available":Number(v).toLocaleString();
+const size=v=>{if(v===null||v===undefined)return "Not available";const u=["B","KB","MB","GB"];let i=0,x=Number(v);while(x>=1024&&i<3){x/=1024;i++}return x.toFixed(i?1:0)+" "+u[i]};
+const dur=v=>v===null||v===undefined?"Not available":(v<120?v.toFixed(2)+" s":(v/60).toFixed(1)+" min");
+const rows=(id,items,cols)=>{$(id).innerHTML=items&&items.length?items.map(r=>"<tr>"+cols(r).map(c=>`<td>${esc(c)}</td>`).join("")+"</tr>").join(""):'<tr><td class="muted">No data</td></tr>'};
+const metric=(l,v)=>`<div class="metric"><span>${esc(l)}</span><strong>${esc(v)}</strong></div>`;
+let currentFindings=[];
+function endpoints(f){const s=(f.source_ips||[]).join(", ")||"—",d=(f.destination_ips||[]).join(", ")||"—";
+ const sp=(f.source_ports||[]).length?` : ${f.source_ports.slice(0,8).join(", ")}`:"",dp=(f.destination_ports||[]).length?` : ${f.destination_ports.slice(0,12).join(", ")}${f.destination_ports.length>12?" …":""}`:"";
+ return [["Source",s+sp],["Destination",d+dp],["Protocol",f.protocol||"—"]]}
+function timing(f){const o=[];if(f.first_seen_elapsed!=null)o.push(["Time (elapsed)",`${f.first_seen_elapsed} s → ${f.last_seen_elapsed} s`+(f.window_seconds?` (window ${f.window_seconds} s)`:"")]);
+ if(f.first_seen_utc)o.push(["Time (UTC)",`${f.first_seen_utc} → ${f.last_seen_utc}`]);return o}
+function card(f){
+ const kv=endpoints(f).concat(timing(f)).concat([["Frames",(f.packet_numbers||[]).length?`${f.packet_numbers.slice(0,40).join(", ")}${f.packet_count>Math.min(40,f.packet_numbers.length)?` … (${f.packet_count} total)`:""}`:"Not available"]]);
+ const stats=Object.entries(f.stats||{}).map(([k,v])=>`${k.replace(/_/g," ")}: ${typeof v==="object"&&v!==null?JSON.stringify(v):v}`);
+ return `<article class="finding ${esc(f.severity)}"><h3>${esc(f.id)} · ${esc(f.name)}</h3>
+<div class="badges"><span class="badge ${esc(f.severity)}">Severity: ${esc(f.severity)}</span><span class="badge">Confidence: ${esc(f.confidence)}</span><span class="badge">${esc(f.classification)}</span><span class="badge">${esc(f.category)}</span></div>
+<p>${esc(f.summary)}</p>
+${f.explanation?`<div class="why"><b>Why it was flagged:</b> ${esc(f.explanation)}</div>`:""}
+${(f.evidence||[]).length?`<b>Evidence</b><ul class="ev">${f.evidence.map(e=>`<li>${esc(e)}</li>`).join("")}</ul>`:""}
+<dl class="kv">${kv.map(([k,v])=>`<dt>${esc(k)}</dt><dd class="${k==="Frames"?"mono":""}">${esc(v)}</dd>`).join("")}</dl>
+${f.recommendation?`<div class="rec"><b>Defensive recommendation:</b> ${esc(f.recommendation)}</div>`:""}
+<details><summary>Limitations, false-positive risk and statistics</summary>
+${f.limitations?`<p><b>Limitations:</b> ${esc(f.limitations)}</p>`:""}${f.false_positive_risk?`<p><b>May also be:</b> ${esc(f.false_positive_risk)}</p>`:""}
+${stats.length?`<p class="mono">${stats.map(esc).join(" · ")}</p>`:""}
+${Object.keys(f.thresholds||{}).length?`<p class="mono">Thresholds: ${Object.entries(f.thresholds).map(([k,v])=>esc(k+"="+JSON.stringify(v))).join(" · ")}</p>`:""}</details></article>`}
+function showFindings(level){const list=currentFindings.filter(f=>level==="All"||f.severity===level);
+ $("findings").innerHTML=list.length?list.map(card).join(""):'<p class="muted">No findings to show. Absence of findings does not prove the capture is safe.</p>';
+ [...document.querySelectorAll("#filters button")].forEach(b=>b.classList.toggle("on",b.dataset.level===level))}
+function spark(series){if(!series||!series.length)return '<p class="muted">Not available (no usable timestamps).</p>';
+ const max=Math.max(...series.map(s=>s.packets),1),w=Math.max(series.length*6,300),bar=w/series.length;
+ return `<svg class="spark" viewBox="0 0 ${w} 70" preserveAspectRatio="none" role="img" aria-label="Packets over time">${series.map((s,i)=>{const h=Math.max(1,s.packets/max*66);return `<rect x="${i*bar}" y="${68-h}" width="${Math.max(bar-1,1)}" height="${h}" fill="#6cc4ff"><title>${esc(s.offset_seconds)} s: ${esc(s.packets)} packets</title></rect>`}).join("")}</svg>`}
+function render(r){
+ const st=r.statistics||{},cap=r.capture||{},tot=st.totals||{},c=r.counts||{},sev=c.by_severity||{},cls=c.by_classification||{},dq=st.data_quality||{};
+ $("headline").textContent=r.headline||"Analysis complete";
+ $("severity").innerHTML=["High","Medium","Low","Informational"].map(s=>metric(s,sev[s]??0)).join("")+["observed","indicator","inferred"].map(s=>metric(s,cls[s]??0)).join("");
+ const ban=[];(r.rule_errors||[]).forEach(e=>ban.push(`<div class="banner bad"><b>Rule failed:</b> ${esc(e.rule_id)} — ${esc(e.error)}</div>`));
+ (r.processing_errors||[]).forEach(e=>ban.push(`<div class="banner bad">${esc(e)}</div>`));
+ if(dq.file_truncated||dq.read_limit_reached)ban.push('<div class="banner warn">The capture is incomplete or was limited for safety; results may be partial.</div>');
+ $("banners").innerHTML=ban.join("");
+ $("overview").innerHTML=[["File",cap.filename||"Uploaded capture"],["Format",cap.format||"Not available"],["File size",size(cap.file_size_bytes)],["Packets",num(tot.packets)],["Captured bytes",size(tot.captured_bytes)],
+  ["Duration",dur(cap.duration_seconds)],["Start (UTC)",cap.start_utc||"Not available"],["End (UTC)",cap.end_utc||"Not available"],["Link type",(cap.link_types||[]).join(", ")||"Not available"]].map(m=>metric(m[0],m[1])).join("");
+ $("observations").innerHTML=(r.observations||[]).map(o=>`<div class="obs ${esc(o.level)}"><b>${esc(o.title)}:</b> ${esc(o.detail)}</div>`).join("")||'<p class="muted">None.</p>';
+ rows("protocols",st.protocols,x=>[x.protocol,num(x.packets),x.percent+"%"]);
+ rows("sources",st.top_sources,x=>[x.ip,num(x.packets),size(x.bytes)]);rows("destinations",st.top_destinations,x=>[x.ip,num(x.packets),size(x.bytes)]);
+ rows("ports",st.top_destination_ports,x=>[x.port+"/"+x.protocol,x.service||"—",num(x.packets)]);
+ const t=st.tcp||{};rows("tcp",Object.entries({"TCP packets":t.packets,"Connection attempts (SYN-only)":t.connection_attempts,"SYN-ACK replies":t.synack_responses,"Resets":t.reset_packets,"FIN packets":t.fin_packets,"Retransmissions":t.retransmissions}),x=>[x[0],num(x[1])]);
+ rows("flows",(st.flows||{}).top,x=>[`${x.protocol} ${x.a_ip}:${x.a_port??""} ⇄ ${x.b_ip}:${x.b_port??""}`,num(x.packets),x.duration==null?"n/a":dur(x.duration)]);
+ const rate=st.traffic_rate;$("rate").innerHTML=rate?`<p class="muted">Window ${esc(rate.window_seconds)} s · average ${esc(rate.average_pps??"n/a")} pkt/s · peak ${esc(rate.peak.packets_per_second)} pkt/s at +${esc(rate.peak.offset_seconds)} s${rate.bursts.length?` · ${rate.bursts.length} burst window(s)`:""}</p>`+spark(rate.series):'<p class="muted">Not available (no usable timestamps).</p>';
+ currentFindings=r.findings||[];
+ $("filters").innerHTML=currentFindings.length?["All","High","Medium","Low","Informational"].map(l=>`<button type="button" data-level="${l}">${l}</button>`).join(""):"";
+ document.querySelectorAll("#filters button").forEach(b=>b.addEventListener("click",()=>showFindings(b.dataset.level)));showFindings("All");
+ rows("rules",r.rules_run,x=>[x.name,x.category,x.findings,x.status,[x.description,x.limitations].filter(Boolean).join(" ")]);
+ $("limitations").innerHTML=(r.limitations||[]).map(l=>`<li>${esc(l)}</li>`).join("");
+ $("results").classList.remove("hidden")}
+$("upload-form").addEventListener("submit",async e=>{e.preventDefault();const file=$("pcap-file").files[0];if(!file)return;
+ $("analyse-button").disabled=true;$("status").textContent="Analysing capture…";$("results").classList.add("hidden");
+ try{const data=new FormData();data.append("file",file);const res=await fetch("/api/analyze",{method:"POST",body:data});
+  let body;try{body=await res.json()}catch(_){throw new Error("The server returned an unreadable response.")}
+  if(!res.ok)throw new Error(body.error||"Analysis failed.");render(body);$("status").textContent="Analysis complete."}
+ catch(err){$("status").innerHTML=`<span class="error">${esc(err.message||"Analysis failed.")}</span>`}
+ finally{$("analyse-button").disabled=false}});
+</script></body></html>
