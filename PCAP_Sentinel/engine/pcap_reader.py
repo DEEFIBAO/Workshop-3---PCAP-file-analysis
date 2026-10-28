@@ -1,54 +1,91 @@
-"""PCAP reader: turn a capture file into normalised packet dictionaries.
+"""TASK 1 - PCAP reader: turn a capture file into normalised packet dictionaries.
 
-Pipeline position:   capture file --> read_pcap() --> packets --> analyze_traffic()
+WHERE IT FITS
+    capture file --> read_pcap()  --> packets --> analyze_traffic() --> rules --> build_report()
 
-``read_pcap(file_path)`` returns ``(packets, capture_info)``.
+WHAT IS ALREADY DONE FOR YOU
+    * engine/default_rules/capture_files.py  ->  CaptureReader: opens .pcap/.pcapng safely and hands you
+      RAW FRAMES (bytes). It does NOT understand Ethernet/IP/TCP - that is YOUR job below.
+    * blank_packet() below builds a packet dictionary with every key set to "not available".
 
-Packet dictionary (every key is ALWAYS present; ``None`` means "not available",
-which is different from 0):
+WHAT YOU MUST WRITE
+    parse_frame(frame)  -> one packet dictionary        (decode the bytes with the struct module)
+    read_pcap(path)     -> (packets, capture_info)
 
+THE PACKET DICTIONARY (every key is ALWAYS present; None means "not available" - that is NOT the same as 0)
     packet_number     int    1-based frame number (matches Wireshark)
-    timestamp         float  seconds since the Unix epoch, or None
+    timestamp         float  seconds since 1970, or None
     captured_length   int    bytes stored in the capture
     original_length   int    bytes on the wire (None if unknown)
     link_type         str    e.g. "Ethernet"
     ip_version        int    4, 6 or None
-    source_ip         str    or None (ARP: sender protocol address)
+    source_ip         str    or None          (ARP: the sender's protocol address)
     destination_ip    str    or None
     ttl               int    IPv4 TTL / IPv6 hop limit, or None
-    ip_protocol       int    IP protocol / next-header number, or None
+    ip_protocol       int    IP protocol number (6=TCP, 17=UDP, 1=ICMP, 58=ICMPv6), or None
     protocol          str    "TCP" "UDP" "ICMP" "ICMPv6" "ARP" or "OTHER"
     source_port       int    TCP/UDP only, else None
     destination_port  int
-    tcp_flags         str    letters from "FSRPAUEC", e.g. "S", "SA", "PA"; None if not TCP
+    tcp_flags         str    letters from "FSRPAUEC" in that order, e.g. "S", "SA", "PA"; None if not TCP
     tcp_seq, tcp_ack, tcp_window   int or None
     icmp_type, icmp_code           int or None (ICMP and ICMPv6)
-    payload           bytes  application bytes captured (b"" when none)
-    payload_length    int    application bytes the headers say exist (may exceed len(payload)
-                             if the capture was truncated), or None if unknown
-    fragment          bool   True for a non-first IPv4 fragment (no transport header)
-    truncated         bool   packet shorter than its headers claim
-    malformed         bool   headers could not be decoded sensibly
-    note              str    short explanation when truncated / malformed / unsupported, else None
+    payload           bytes  application bytes (b"" when none)
+    payload_length    int    application bytes the headers say exist (can exceed len(payload) if the capture
+                             was cut short), or None if unknown
+    fragment          bool   True for a non-first IPv4 fragment (it has no TCP/UDP header)
+    truncated         bool   the packet is shorter than its headers claim
+    malformed         bool   the headers make no sense
+    note              str    short reason when truncated / malformed / unsupported, else None
+
+capture_info (returned by read_pcap) must contain:
+    file_size_bytes, format, link_types (list of names), snaplen, packet_count, file_truncated, read_limit_reached,
+    warnings (list of str), unsupported_packets, malformed_packets, truncated_packets
+
+FRAME DICTIONARY you receive from CaptureReader.frames():
+    {"number": 1, "timestamp": 1700000000.5 or None, "link_type": 1, "data": b"...", "original_length": 74}
+
+HEADER CHEAT-SHEET (offsets in bytes from the start of each header; network byte order -> use "!" in struct)
+    Ethernet II (14 bytes): dst MAC 0-5 | src MAC 6-11 | EtherType 12-13  (0x0800 IPv4, 0x86DD IPv6, 0x0806 ARP,
+                            0x8100 = a 4-byte VLAN tag follows; the real EtherType is 2 bytes later)
+    IPv4 (20+ bytes):  byte 0 = version<<4 | header_length_in_32bit_words | total length 2-3 | TTL 8 |
+                       protocol 9 | source 12-15 | destination 16-19 | flags+fragment offset 6-7 (offset = & 0x1FFF)
+    IPv6 (40 bytes):   payload length 4-5 | next header 6 | hop limit 7 | source 8-23 | destination 24-39
+                       (extension headers: next-header values 0, 43, 44, 51, 60 - skip them to find TCP/UDP)
+    TCP (20+ bytes):   src port 0-1 | dst port 2-3 | seq 4-7 | ack 8-11 | data offset = high nibble of byte 12
+                       (x4 = header length) | flags = byte 13 (FIN 0x01 SYN 0x02 RST 0x04 PSH 0x08 ACK 0x10 URG 0x20
+                       ECE 0x40 CWR 0x80) | window 14-15
+    UDP (8 bytes):     src port 0-1 | dst port 2-3 | length 4-5
+    ICMP / ICMPv6:     type byte 0 | code byte 1   (the payload starts at byte 8)
+    ARP (28 bytes, IPv4 over Ethernet): sender IP 14-17 | target IP 24-27
+    Tip: ipaddress.ip_address(raw_bytes) turns 4 or 16 raw bytes into the text form.
+
+HOW YOU KNOW YOU ARE DONE
+    python -m unittest tests.test_student_tasks.Task1PcapReader -v     (contract tests)
+    python -m unittest tests.test_pcap_reader -v                       (full reader tests, incl. IPv6, VLAN, damage)
+
+SUGGESTED ORDER (each step makes more tests pass)
+    Tier 1  Ethernet -> IPv4 -> TCP / UDP / ICMP, timestamps, payload, read_pcap loop        (dashboard works)
+    Tier 2  IPv6 (+ extension headers), VLAN tags, ARP, raw-IP link types, IPv4 fragments,
+            truncated / malformed flags, never crashing on a bad packet                      (all tests pass)
 """
 from __future__ import annotations
 
-import ipaddress
-import os
-import struct
-from typing import List, Optional, Tuple
+import ipaddress   # noqa: F401  (you will want this)
+import struct      # noqa: F401  (and this)
+from typing import List, Tuple
 
-from engine.default_rules.capture_files import CaptureReader, PcapFormatError, LINK_TYPE_NAMES
+from engine.default_rules.capture_files import CaptureReader, PcapFormatError, LINK_TYPE_NAMES  # noqa: F401
 
 # Safety valve for very large uploads (memory). Raise it if you analyse big files locally.
 MAX_PACKETS = 250_000
 
+# (letter, bit) pairs in the order the letters must appear in packet["tcp_flags"].
 TCP_FLAG_LETTERS = (("F", 0x01), ("S", 0x02), ("R", 0x04), ("P", 0x08),
                     ("A", 0x10), ("U", 0x20), ("E", 0x40), ("C", 0x80))
-IPV6_EXTENSION_HEADERS = {0, 43, 44, 51, 60}          # hop-by-hop, routing, fragment, AH, dest-options
 
 
 def blank_packet(number: int, timestamp, captured: int, original, link_name: str) -> dict:
+    """PROVIDED. A packet dictionary with every key present and 'not available' values."""
     return {
         "packet_number": number, "timestamp": timestamp, "captured_length": captured,
         "original_length": original, "link_type": link_name,
@@ -60,207 +97,40 @@ def blank_packet(number: int, timestamp, captured: int, original, link_name: str
     }
 
 
-def _flags_to_text(value: int) -> str:
-    return "".join(letter for letter, bit in TCP_FLAG_LETTERS if value & bit)
-
-
-def _strip_link_layer(data: bytes, link_type: int) -> Tuple[Optional[int], int, Optional[str]]:
-    """Return (ethertype, offset_of_network_header, problem). ethertype None = unsupported."""
-    if link_type == 1:                                           # Ethernet II (+ VLAN tags)
-        if len(data) < 14:
-            return None, 0, "shorter than an Ethernet header"
-        ethertype, offset = struct.unpack("!H", data[12:14])[0], 14
-        while ethertype in (0x8100, 0x88A8, 0x9100) and len(data) >= offset + 4:
-            ethertype = struct.unpack("!H", data[offset + 2:offset + 4])[0]
-            offset += 4
-        return ethertype, offset, None
-    if link_type == 113:                                         # Linux cooked capture v1
-        if len(data) < 16:
-            return None, 0, "shorter than a Linux cooked header"
-        return struct.unpack("!H", data[14:16])[0], 16, None
-    if link_type == 276:                                         # Linux cooked capture v2
-        if len(data) < 20:
-            return None, 0, "shorter than a Linux cooked v2 header"
-        return struct.unpack("!H", data[0:2])[0], 20, None
-    if link_type == 0:                                           # BSD loopback: 4-byte family
-        if len(data) < 4:
-            return None, 0, "shorter than a loopback header"
-        family = struct.unpack("<I", data[:4])[0]
-        return (0x0800 if family == 2 else 0x86DD if family in (10, 24, 28, 30) else None), 4, None
-    if link_type in (12, 101, 228, 229):                         # raw IP: version nibble decides
-        if not data:
-            return None, 0, "empty packet"
-        version = data[0] >> 4
-        return (0x0800 if version == 4 else 0x86DD if version == 6 else None), 0, None
-    return None, 0, "unsupported link-layer type"
-
-
-def _decode_transport(item: dict, proto: int, data: bytes, offset: int, end: int) -> None:
-    """Fill TCP/UDP/ICMP fields. ``data[offset:end]`` is the transport segment."""
-    segment = data[offset:end]
-    if proto == 6:                                               # TCP
-        item["protocol"] = "TCP"
-        if len(segment) < 20:
-            item.update(truncated=True, note="truncated TCP header")
-            return
-        sport, dport, seq, ack, off_flags, window = struct.unpack("!HHIIHH", segment[:16])
-        header_len = (off_flags >> 12) * 4
-        item.update(source_port=sport, destination_port=dport, tcp_seq=seq, tcp_ack=ack,
-                    tcp_flags=_flags_to_text(off_flags & 0xFF), tcp_window=window)
-        if header_len < 20:
-            item.update(malformed=True, note="invalid TCP data offset")
-            return
-        if header_len > len(segment):
-            item.update(truncated=True, note="truncated TCP options")
-            return
-        item["payload"] = segment[header_len:]
-    elif proto == 17:                                            # UDP
-        item["protocol"] = "UDP"
-        if len(segment) < 8:
-            item.update(truncated=True, note="truncated UDP header")
-            return
-        sport, dport, length = struct.unpack("!HHH", segment[:6])
-        item.update(source_port=sport, destination_port=dport)
-        item["payload"] = segment[8:] if length < 8 else segment[8:length]
-    elif proto in (1, 58):                                       # ICMP / ICMPv6
-        item["protocol"] = "ICMP" if proto == 1 else "ICMPv6"
-        if len(segment) < 4:
-            item.update(truncated=True, note="truncated ICMP header")
-            return
-        item["icmp_type"], item["icmp_code"] = segment[0], segment[1]
-        item["payload"] = segment[8:] if len(segment) > 8 else b""
-    else:
-        item["payload"] = segment
-
-
-def _decode_ipv4(item: dict, data: bytes, offset: int) -> None:
-    if len(data) < offset + 20:
-        item.update(truncated=True, note="truncated IPv4 header")
-        return
-    first = data[offset]
-    ihl = (first & 0x0F) * 4
-    if first >> 4 != 4 or ihl < 20:
-        item.update(malformed=True, note="invalid IPv4 header")
-        return
-    total_len, frag, ttl, proto = struct.unpack("!HHBB", data[offset + 2:offset + 8])[0], \
-        struct.unpack("!H", data[offset + 6:offset + 8])[0], data[offset + 8], data[offset + 9]
-    item.update(ip_version=4, ttl=ttl, ip_protocol=proto,
-                source_ip=str(ipaddress.IPv4Address(data[offset + 12:offset + 16])),
-                destination_ip=str(ipaddress.IPv4Address(data[offset + 16:offset + 20])))
-    if total_len < ihl:
-        item.update(malformed=True, note="IPv4 total length smaller than header")
-        return
-    end = min(offset + total_len, len(data))                     # also trims Ethernet padding
-    if offset + total_len > len(data):
-        item.update(truncated=True, note="packet shorter than IPv4 total length (snaplen?)")
-    if (frag & 0x1FFF) != 0:                                      # later fragment: no transport header
-        item.update(fragment=True, protocol="OTHER", payload=data[offset + ihl:end])
-        return
-    transport_len = total_len - ihl
-    _decode_transport(item, proto, data, offset + ihl, end)
-    if item["protocol"] in ("TCP",):
-        header = ((data[offset + ihl + 12] >> 4) * 4) if len(data) > offset + ihl + 12 else 20
-        item["payload_length"] = max(transport_len - header, 0)
-    elif item["protocol"] == "UDP":
-        item["payload_length"] = max(transport_len - 8, 0)
-    elif item["protocol"] in ("ICMP", "ICMPv6"):
-        item["payload_length"] = max(transport_len - 8, 0)
-    else:
-        item["payload_length"] = max(transport_len, 0)
-
-
-def _decode_ipv6(item: dict, data: bytes, offset: int) -> None:
-    if len(data) < offset + 40:
-        item.update(truncated=True, note="truncated IPv6 header")
-        return
-    payload_len, next_header, hop = struct.unpack("!HBB", data[offset + 4:offset + 8])
-    item.update(ip_version=6, ttl=hop,
-                source_ip=str(ipaddress.IPv6Address(data[offset + 8:offset + 24])),
-                destination_ip=str(ipaddress.IPv6Address(data[offset + 24:offset + 40])))
-    cursor, hops = offset + 40, 0
-    end = min(offset + 40 + payload_len, len(data)) if payload_len else len(data)
-    while next_header in IPV6_EXTENSION_HEADERS and hops < 8:
-        if len(data) < cursor + 8:
-            item.update(truncated=True, note="truncated IPv6 extension header")
-            return
-        following = data[cursor]
-        if next_header == 44:                                    # fragment header (8 bytes)
-            if struct.unpack("!H", data[cursor + 2:cursor + 4])[0] & 0xFFF8:
-                item.update(fragment=True, ip_protocol=data[cursor], protocol="OTHER")
-                return
-            cursor += 8
-        elif next_header == 51:                                  # AH uses 4-byte units
-            cursor += (data[cursor + 1] + 2) * 4
-        else:
-            cursor += (data[cursor + 1] + 1) * 8
-        next_header, hops = following, hops + 1
-    item["ip_protocol"] = next_header
-    if payload_len and offset + 40 + payload_len > len(data):
-        item.update(truncated=True, note="packet shorter than IPv6 payload length (snaplen?)")
-    _decode_transport(item, next_header, data, cursor, end)
-    total = max((payload_len or len(data) - offset - 40) - (cursor - offset - 40), 0)
-    item["payload_length"] = total if item["protocol"] not in ("TCP", "UDP", "ICMPv6") else max(
-        total - (20 if item["protocol"] == "TCP" else 8), 0)
-    if item["protocol"] == "TCP" and len(data) > cursor + 12:
-        item["payload_length"] = max(total - (data[cursor + 12] >> 4) * 4, 0)
-
-
 def parse_frame(frame: dict) -> dict:
-    """Decode one raw frame (from CaptureReader) into a packet dictionary."""
-    data = frame["data"]
-    link_name = LINK_TYPE_NAMES.get(frame["link_type"], f"Unsupported ({frame['link_type']})")
-    item = blank_packet(frame["number"], frame["timestamp"], len(data), frame["original_length"], link_name)
-    if frame["original_length"] is not None and len(data) < frame["original_length"]:
-        item["truncated"] = True
-        item["note"] = "capture snaplen shorter than the packet"
-    try:
-        ethertype, offset, problem = _strip_link_layer(data, frame["link_type"])
-        if problem:
-            item.update(malformed=problem.startswith("shorter"), note=problem)
-        elif ethertype == 0x0800:
-            _decode_ipv4(item, data, offset)
-        elif ethertype == 0x86DD:
-            _decode_ipv6(item, data, offset)
-        elif ethertype == 0x0806 and len(data) >= offset + 28:   # ARP (IPv4 over Ethernet)
-            item.update(protocol="ARP", source_ip=str(ipaddress.IPv4Address(data[offset + 14:offset + 18])),
-                        destination_ip=str(ipaddress.IPv4Address(data[offset + 24:offset + 28])),
-                        icmp_type=struct.unpack("!H", data[offset + 6:offset + 8])[0])
-            item["note"] = item["note"] or None
-        elif ethertype is not None:
-            item["note"] = item["note"] or f"non-IP ethertype 0x{ethertype:04x}"
-    except (struct.error, ValueError, IndexError):
-        item.update(malformed=True, note="packet could not be decoded")
-    return item
+    """Decode ONE raw frame into a packet dictionary.
+
+    Receives: a frame dict from CaptureReader (see the top of this file).
+    Returns:  a packet dictionary. NEVER raise on a damaged packet - set malformed/truncated and a note instead.
+
+    TODO 1.1  Start with blank_packet(frame["number"], frame["timestamp"], len(frame["data"]), frame["original_length"], link_name)
+              where link_name = LINK_TYPE_NAMES.get(frame["link_type"], "Unsupported (...)").
+    TODO 1.2  If original_length is bigger than len(data) the capture cut the packet short: set truncated=True.
+    TODO 1.3  Ethernet: read the EtherType at bytes 12-13. 0x0800 -> IPv4. (Other values: leave protocol "OTHER".)
+    TODO 1.4  IPv4: read the header length, TTL, protocol and both addresses. Set ip_version, ttl, ip_protocol, source_ip,
+              destination_ip. The transport header starts at <ethernet 14> + <IPv4 header length>.
+              Use the IPv4 "total length" field to ignore Ethernet padding at the end of short frames.
+    TODO 1.5  TCP (protocol 6): ports, seq, ack, window, flags (convert the flag byte to letters using TCP_FLAG_LETTERS),
+              header length from the data offset, payload = everything after the TCP header,
+              payload_length = IPv4 total length - IPv4 header - TCP header.
+    TODO 1.6  UDP (17): ports and payload (after 8 bytes). ICMP (1): icmp_type, icmp_code, payload after byte 8.
+    TODO 1.7  (Tier 2) IPv6, VLAN (0x8100), ARP (0x0806), link types 101/12/228/229 (raw IP, no Ethernet header),
+              ICMPv6 (58), IPv4 fragments (offset != 0 -> fragment=True, no ports), truncated headers.
+              Wrap the decoding in try/except (struct.error, IndexError, ValueError) and set malformed=True.
+    """
+    raise NotImplementedError("TODO (Task 1): implement parse_frame() in engine/pcap_reader.py")
 
 
 def read_pcap(file_path: str, max_packets: int = MAX_PACKETS) -> Tuple[List[dict], dict]:
-    """Read a capture and return ``(packets, capture_info)``.
+    """Read a capture file and return ``(packets, capture_info)``.
 
-    ``capture_info`` keys: file_size_bytes, format, link_types (list of names), snaplen,
-    packet_count, file_truncated, read_limit_reached, warnings (list of str),
-    unsupported_packets, malformed_packets, truncated_packets.
-
-    Raises ``PcapFormatError`` when the file is not a PCAP/PCAPNG capture.
+    TODO 2.1  reader = CaptureReader(file_path)   (raises PcapFormatError for non-captures - let it propagate).
+    TODO 2.2  Loop over reader.frames(), calling parse_frame() for each one. Stop after ``max_packets`` and remember
+              that you hit the limit (add a warning text such as "Only the first N packets were analysed").
+    TODO 2.3  Build capture_info with every key listed at the top of this file. reader.file_size, reader.format,
+              reader.snaplen, reader.file_truncated and reader.warnings are ready for you; link_types is
+              sorted(reader.link_types.values()). Count malformed / truncated / unsupported packets from the packet list
+              (unsupported = a note that contains the word "unsupported").
+    TODO 2.4  Return (packets, capture_info).
     """
-    reader = CaptureReader(file_path)
-    packets: List[dict] = []
-    limit_reached = False
-    for frame in reader.frames():
-        if len(packets) >= max_packets:
-            limit_reached = True
-            break
-        packets.append(parse_frame(frame))
-    warnings = list(reader.warnings)
-    if limit_reached:
-        warnings.append(f"Only the first {max_packets} packets were analysed (memory safety limit).")
-    link_names = sorted(reader.link_types.values())
-    info = {
-        "file_size_bytes": reader.file_size, "format": reader.format, "link_types": link_names,
-        "snaplen": reader.snaplen, "packet_count": len(packets),
-        "file_truncated": reader.file_truncated, "read_limit_reached": limit_reached,
-        "warnings": warnings,
-        "unsupported_packets": sum(1 for p in packets if p["note"] and "unsupported" in p["note"]),
-        "malformed_packets": sum(1 for p in packets if p["malformed"]),
-        "truncated_packets": sum(1 for p in packets if p["truncated"]),
-    }
-    return packets, info
+    raise NotImplementedError("TODO (Task 1): implement read_pcap() in engine/pcap_reader.py")

@@ -1,37 +1,28 @@
-"""Traffic analyser: general statistics, flows and time-window rates (no attack logic here).
+"""TASK 2 - Traffic analyser: general statistics, conversations and traffic rates (no attack logic here).
 
-Pipeline position:   packets --> analyze_traffic() --> context --> rules --> build_report()
+WHERE IT FITS
+    packets --> analyze_traffic() --> context --> (detection rules) --> build_report()
 
-``analyze_traffic(packets, capture_info=None, config=None)`` returns the shared ``context`` dict.
-It is built from one small function per statistics block (each one is a workshop task):
+You implement nine small functions. ``analyze_traffic()`` at the bottom is PROVIDED and simply calls them and
+packs the results into the ``context`` dictionary the rules and the dashboard use.
 
-    context["packets"], context["capture_info"], context["config"]
-    context["flows"]    list of conversations (see _new_flow)
-    context["summary"]  the statistics block documented below
+RULES OF THE GAME
+    * Packets are the dictionaries described at the top of engine/pcap_reader.py.
+    * "Not available" is NOT zero: use None when something cannot be computed (no timestamps -> no duration, no rate).
+    * Do not loop in a way that explodes memory: captures can have hundreds of thousands of packets.
 
-summary layout (``None`` = could not be computed, which is NOT the same as 0):
-    capture      file_size_bytes, format, link_types, packet_count, first_timestamp, last_timestamp,
-                 duration_seconds, start_utc, end_utc
-    totals       packets, captured_bytes, wire_bytes, average_packet_size
-    protocols    [{protocol, packets, bytes, percent}] largest first
-    top_sources / top_destinations      [{ip, packets, bytes}]
-    top_destination_ports               [{port, protocol, service, packets}]
-    tcp          packets, connection_attempts, synack_responses, reset_packets, fin_packets,
-                 retransmissions, flag_counts
-    flows        total, tracked, truncated, top (busiest conversations)
-    traffic_rate window_seconds, average_pps, average_bytes_per_second, peak, bursts, series
-                 (None when the capture has no usable timestamps)
-    data_quality truncated_packets, malformed_packets, unsupported_packets, packets_without_timestamp,
-                 file_truncated, read_limit_reached, warnings, notes
+HOW YOU KNOW YOU ARE DONE
+    python -m unittest tests.test_student_tasks.Task2TrafficAnalyzer -v
+    python -m unittest tests.test_framework.StatisticsTests -v
 """
 from __future__ import annotations
 
-import statistics
-from collections import Counter
+import statistics   # noqa: F401  (handy for the median)
+from collections import Counter   # noqa: F401  (handy for counting)
 from datetime import datetime, timezone
 from typing import Dict, List, Optional, Tuple
 
-from engine.default_rules.services import service_name
+from engine.default_rules.services import service_name   # noqa: F401  (port -> "HTTP", "FTP", ...)
 
 DEFAULT_CONFIG = {
     "top_n": 10,                    # rows in each "top" table
@@ -45,6 +36,7 @@ DEFAULT_CONFIG = {
 
 
 def _utc(timestamp: Optional[float]) -> Optional[str]:
+    """PROVIDED. Epoch seconds -> ISO-8601 UTC text (None stays None)."""
     if timestamp is None:
         return None
     try:
@@ -54,196 +46,111 @@ def _utc(timestamp: Optional[float]) -> Optional[str]:
 
 
 def capture_block(packets: List[dict], capture_info: Optional[dict]) -> dict:
-    """summary["capture"]: file facts plus first/last timestamp and duration (None if no timestamps)."""
-    info = capture_info or {}
-    stamps = [p["timestamp"] for p in packets if p["timestamp"] is not None]
-    first, last = (min(stamps), max(stamps)) if stamps else (None, None)
-    return {"file_size_bytes": info.get("file_size_bytes"), "format": info.get("format"),
-            "link_types": info.get("link_types", []), "packet_count": len(packets),
-            "first_timestamp": first, "last_timestamp": last,
-            "duration_seconds": round(last - first, 6) if first is not None else None,
-            "start_utc": _utc(first), "end_utc": _utc(last)}
+    """summary["capture"].
+
+    Return a dict with: file_size_bytes, format, link_types (copy these three from capture_info with sensible defaults),
+    packet_count, first_timestamp, last_timestamp, duration_seconds, start_utc, end_utc.
+
+    TODO  Ignore packets whose timestamp is None. If NO packet has a timestamp, first/last/duration/start/end are None.
+          duration_seconds = last - first (round to 6 places). Use _utc() for start_utc / end_utc.
+    """
+    raise NotImplementedError("TODO (Task 2): capture_block()")
 
 
 def totals_block(packets: List[dict]) -> dict:
-    """summary["totals"]: packets, captured_bytes, wire_bytes (None if any length unknown), average_packet_size."""
-    total = len(packets)
-    captured = sum(p["captured_length"] for p in packets)
-    wire_known = all(p["original_length"] is not None for p in packets)
-    return {"packets": total, "captured_bytes": captured,
-            "wire_bytes": sum(p["original_length"] for p in packets) if total and wire_known else None,
-            "average_packet_size": round(captured / total, 1) if total else None}
+    """summary["totals"] -> {"packets", "captured_bytes", "wire_bytes", "average_packet_size"}.
+
+    TODO  captured_bytes = sum of captured_length. wire_bytes = sum of original_length, but None when the capture is
+          empty OR any packet's original_length is None (a partial sum would be misleading).
+          average_packet_size = captured_bytes / packets rounded to 1 place, None for an empty capture.
+    """
+    raise NotImplementedError("TODO (Task 2): totals_block()")
 
 
 def protocol_table(packets: List[dict]) -> List[dict]:
-    """summary["protocols"]: [{protocol, packets, bytes, percent}] ordered by packets, largest first."""
-    counts, sizes = Counter(), Counter()
-    for p in packets:
-        counts[p["protocol"]] += 1
-        sizes[p["protocol"]] += p["captured_length"]
-    return [{"protocol": name, "packets": n, "bytes": sizes[name], "percent": round(100 * n / len(packets), 1)}
-            for name, n in counts.most_common()]
+    """summary["protocols"] -> [{"protocol", "packets", "bytes", "percent"}] ordered by packets, largest first.
+
+    TODO  Count packets and captured bytes per packet["protocol"]; percent = 100 * packets / total, 1 decimal place.
+    """
+    raise NotImplementedError("TODO (Task 2): protocol_table()")
 
 
 def top_hosts(packets: List[dict], role: str, top_n: int) -> List[dict]:
-    """summary["top_sources"] (role="source") / ["top_destinations"] (role="destination"): [{ip, packets, bytes}]."""
-    key = "source_ip" if role == "source" else "destination_ip"
-    counts, sizes = Counter(), Counter()
-    for p in packets:
-        if p[key]:
-            counts[p[key]] += 1
-            sizes[p[key]] += p["captured_length"]
-    return [{"ip": ip, "packets": n, "bytes": sizes[ip]} for ip, n in counts.most_common(top_n)]
+    """summary["top_sources"] (role == "source") or summary["top_destinations"] (role == "destination").
+
+    Return [{"ip", "packets", "bytes"}] for the ``top_n`` busiest addresses, busiest first.
+    TODO  Use source_ip or destination_ip depending on ``role``. Skip packets where that address is None.
+    """
+    raise NotImplementedError("TODO (Task 2): top_hosts()")
 
 
 def top_service_ports(packets: List[dict], top_n: int) -> List[dict]:
-    """summary["top_destination_ports"]: [{port, protocol, service, packets}].
+    """summary["top_destination_ports"] -> [{"port", "protocol", "service", "packets"}], busiest first.
 
-    Replies go to random client ports, so only count packets heading TOWARDS the service port:
-    destination_port <= source_port (or a missing source port).
+    Replies travel to random client ports, which would swamp the table. So count only TCP/UDP packets that head TOWARDS
+    the service port: destination_port <= source_port (or source_port is None).
+    TODO  Count by (protocol, destination_port); service = service_name(port) (None when unknown).
     """
-    ports: Counter = Counter()
-    for p in packets:
-        if p["protocol"] in ("TCP", "UDP") and p["destination_port"] is not None and (
-                p["source_port"] is None or p["destination_port"] <= p["source_port"]):
-            ports[(p["protocol"], p["destination_port"])] += 1
-    return [{"port": port, "protocol": proto, "service": service_name(port), "packets": n}
-            for (proto, port), n in ports.most_common(top_n)]
+    raise NotImplementedError("TODO (Task 2): top_service_ports()")
 
 
 def tcp_statistics(packets: List[dict]) -> dict:
-    """summary["tcp"]: packets, connection_attempts (SYN-only), synack_responses, reset_packets, fin_packets,
-    retransmissions (same segment seen twice), flag_counts."""
-    flag_counts: Counter = Counter()
-    seen, retransmissions, total = set(), 0, 0
-    for p in packets:
-        if p["protocol"] != "TCP":
-            continue
-        total += 1
-        flags = p["tcp_flags"] or ""
-        for name, letter in (("SYN", "S"), ("RST", "R"), ("FIN", "F"), ("PSH", "P")):
-            if letter in flags:
-                flag_counts[name] += 1
-        if "S" in flags and "A" in flags:
-            flag_counts["SYN-ACK"] += 1
-        elif "S" in flags and "R" not in flags:
-            flag_counts["SYN-only"] += 1
-        if flags == "":
-            flag_counts["NULL (no flags)"] += 1
-        if p["payload_length"] or "S" in flags or "F" in flags:
-            key = (p["source_ip"], p["source_port"], p["destination_ip"], p["destination_port"],
-                   p["tcp_seq"], p["payload_length"], "S" in flags, "F" in flags)
-            if key in seen:
-                retransmissions += 1
-            elif len(seen) < 1_000_000:
-                seen.add(key)
-    return {"packets": total, "connection_attempts": flag_counts["SYN-only"], "synack_responses": flag_counts["SYN-ACK"],
-            "reset_packets": flag_counts["RST"], "fin_packets": flag_counts["FIN"],
-            "retransmissions": retransmissions, "flag_counts": dict(flag_counts)}
+    """summary["tcp"] -> {"packets", "connection_attempts", "synack_responses", "reset_packets", "fin_packets",
+    "retransmissions", "flag_counts"}.
+
+    TODO  Look only at TCP packets. A connection attempt is a SYN WITHOUT ACK (and without RST). A SYN-ACK has both S and A.
+          Count RST and FIN packets. flag_counts = a dict of counts (e.g. {"SYN": .., "SYN-ACK": .., "RST": ..}).
+          Retransmission: a segment with data (or SYN/FIN) whose (source ip, source port, destination ip, destination port,
+          tcp_seq, payload_length, has-SYN, has-FIN) was already seen. Keep the 'seen' set bounded (<= 1,000,000 entries).
+    """
+    raise NotImplementedError("TODO (Task 2): tcp_statistics()")
 
 
 def build_flows(packets: List[dict], max_flows: int) -> Tuple[List[dict], int]:
-    """Conversations (both directions together) -> (flow list, packets that did not fit under ``max_flows``).
+    """Conversations (both directions together) -> (flow_list, untracked_packets).
 
-    Flow dict: protocol, a_ip, a_port, b_ip, b_port, packets, bytes, packets_a_to_b, first_ts, last_ts,
-    duration (None when no timestamps). Sorted by packets, largest first. ARP / non-IP packets are skipped.
+    A flow dict: {"protocol", "a_ip", "a_port", "b_ip", "b_port", "packets", "bytes", "packets_a_to_b",
+                  "first_ts", "last_ts", "duration"}      (a = whoever sent the first packet we saw)
+    TODO  Skip packets without both IP addresses and ARP packets. The flow key must be the same for A->B and B->A
+          (hint: sort the two (ip, port) endpoints). Missing ports count as 0 in the key.
+          Stop creating NEW flows once ``max_flows`` exist; count the packets that did not fit as untracked.
+          duration = last_ts - first_ts, or None when the flow has no timestamps.
+          Return the flows sorted by packets (largest first).
     """
-    flows: Dict[tuple, dict] = {}
-    untracked = 0
-    for p in packets:
-        src, dst = p["source_ip"], p["destination_ip"]
-        if not src or not dst or p["protocol"] == "ARP":
-            continue
-        a, b = (src, p["source_port"] or 0), (dst, p["destination_port"] or 0)
-        key = (p["protocol"],) + ((a, b) if a <= b else (b, a))
-        flow = flows.get(key)
-        if flow is None:
-            if len(flows) >= max_flows:
-                untracked += 1
-                continue
-            flow = flows[key] = {"protocol": p["protocol"], "a_ip": src, "a_port": p["source_port"], "b_ip": dst,
-                                 "b_port": p["destination_port"], "packets": 0, "bytes": 0, "packets_a_to_b": 0,
-                                 "first_ts": None, "last_ts": None, "duration": None}
-        flow["packets"] += 1
-        flow["bytes"] += p["captured_length"]
-        if (src, p["source_port"]) == (flow["a_ip"], flow["a_port"]):
-            flow["packets_a_to_b"] += 1
-        ts = p["timestamp"]
-        if ts is not None:
-            flow["first_ts"] = ts if flow["first_ts"] is None else min(flow["first_ts"], ts)
-            flow["last_ts"] = ts if flow["last_ts"] is None else max(flow["last_ts"], ts)
-    for flow in flows.values():
-        if flow["first_ts"] is not None:
-            flow["duration"] = round(flow["last_ts"] - flow["first_ts"], 6)
-    return sorted(flows.values(), key=lambda f: (-f["packets"], f["first_ts"] or 0)), untracked
+    raise NotImplementedError("TODO (Task 2): build_flows()")
 
 
 def rate_summary(packets: List[dict], config: dict) -> Optional[dict]:
-    """summary["traffic_rate"]: packets per time bin, the peak bin, burst bins and a down-sampled series.
+    """summary["traffic_rate"]: packets per time window. Return None if no packet has a timestamp.
 
-    Uses packet timestamps only; returns None when no packet has a timestamp (unavailable, not zero).
+    Return {"window_seconds", "average_pps", "average_bytes_per_second", "peak", "bursts", "series"} where
+        peak   = {"offset_seconds", "packets", "packets_per_second", "bytes"}   (the busiest window)
+        bursts = up to 5 windows with >= config["burst_min_packets"] packets AND >= config["burst_factor"] x the
+                 MEDIAN busy window, strongest first: {"offset_seconds", "window_seconds", "packets",
+                 "packets_per_second", "bytes"}
+        series = about config["series_points"] points for the dashboard chart: [{"offset_seconds", "packets", "bytes"}]
+    TODO  1. Window width = config["rate_window_seconds"]; widen it if duration / width > config["max_rate_bins"].
+          2. window index = int((timestamp - first_timestamp) / width). Count packets and bytes per window.
+          3. average_pps = packets / duration, but None when duration is 0 (undefined, not 0).
+          4. Find the peak and the bursts, then merge neighbouring windows into at most series_points points.
     """
-    timed = [p for p in packets if p["timestamp"] is not None]
-    timestamps = [p["timestamp"] for p in timed]
-    sizes = [p["captured_length"] for p in timed]
-    if not timestamps:
-        return None
-    start, end = min(timestamps), max(timestamps)
-    duration = end - start
-    width = float(config["rate_window_seconds"])
-    if duration / width > config["max_rate_bins"]:
-        width = duration / config["max_rate_bins"]
-    bins_p: Counter = Counter()
-    bins_b: Counter = Counter()
-    for ts, size in zip(timestamps, sizes):
-        slot = int((ts - start) / width)
-        bins_p[slot] += 1
-        bins_b[slot] += size
-    busy = [n for n in bins_p.values() if n]
-    median = statistics.median(busy)
-    peak_slot = max(bins_p, key=lambda s: (bins_p[s], -s))
-    bursts = [{"offset_seconds": round(slot * width, 3), "window_seconds": round(width, 3), "packets": n,
-               "packets_per_second": round(n / width, 1), "bytes": bins_b[slot]}
-              for slot, n in sorted(bins_p.items(), key=lambda kv: -kv[1])
-              if n >= config["burst_min_packets"] and n >= config["burst_factor"] * median][:5]
-    points = int(config["series_points"])
-    chunk = max(1, -(-(int(duration / width) + 1) // points))      # ceil division
-    series: Dict[int, List[int]] = {}
-    for slot, n in bins_p.items():
-        bucket = series.setdefault(slot // chunk, [0, 0])
-        bucket[0] += n
-        bucket[1] += bins_b[slot]
-    return {
-        "window_seconds": round(width, 3),
-        "average_pps": round(len(timestamps) / duration, 2) if duration > 0 else None,
-        "average_bytes_per_second": round(sum(sizes) / duration, 1) if duration > 0 else None,
-        "peak": {"offset_seconds": round(peak_slot * width, 3), "packets": bins_p[peak_slot],
-                 "packets_per_second": round(bins_p[peak_slot] / width, 1), "bytes": bins_b[peak_slot]},
-        "bursts": bursts,
-        "series": [{"offset_seconds": round(k * chunk * width, 3), "packets": v[0], "bytes": v[1]}
-                   for k, v in sorted(series.items())],
-    }
+    raise NotImplementedError("TODO (Task 2): rate_summary()")
 
 
 def quality_block(packets: List[dict], capture_info: Optional[dict]) -> dict:
-    """summary["data_quality"]: counts of truncated / malformed / unsupported packets, missing timestamps, warnings."""
-    info = capture_info or {}
-    missing = sum(1 for p in packets if p["timestamp"] is None)
-    notes: List[str] = []
-    if missing:
-        notes.append(f"{missing} packet(s) have no timestamp and are excluded from rate and time-window analysis.")
-    if info.get("file_truncated"):
-        notes.append("The capture file ends abruptly; the final packets may be missing.")
-    truncated = sum(1 for p in packets if p["truncated"])
-    if info.get("snaplen") and truncated:
-        notes.append("Some packets were cut short by the capture snap length; payload-based findings may be incomplete.")
-    return {"truncated_packets": truncated, "malformed_packets": sum(1 for p in packets if p["malformed"]),
-            "unsupported_packets": info.get("unsupported_packets"), "packets_without_timestamp": missing,
-            "file_truncated": info.get("file_truncated", False), "read_limit_reached": info.get("read_limit_reached", False),
-            "warnings": list(info.get("warnings", [])), "notes": notes}
+    """summary["data_quality"] -> {"truncated_packets", "malformed_packets", "unsupported_packets",
+    "packets_without_timestamp", "file_truncated", "read_limit_reached", "warnings", "notes"}.
+
+    TODO  Count truncated / malformed packets from the packet flags and packets with timestamp None.
+          Copy unsupported_packets, file_truncated, read_limit_reached and warnings from capture_info (defaults: None,
+          False, False, []). ``notes`` = human sentences, e.g. when timestamps are missing, the file ends abruptly
+          (file_truncated) or packets were cut by the snap length - the dashboard shows them as warnings.
+    """
+    raise NotImplementedError("TODO (Task 2): quality_block()")
 
 
 def analyze_traffic(packets: List[dict], capture_info: Optional[dict] = None, config: Optional[dict] = None) -> dict:
+    """PROVIDED glue: calls your functions and builds the shared ``context`` dictionary."""
     config = {**DEFAULT_CONFIG, **(config or {})}
     flow_list, untracked = build_flows(packets, config["max_flows"])
     summary = {

@@ -1,19 +1,35 @@
-"""DDoS / flood rule: detect a possible TCP SYN flood.
+"""TASK 4 - DDoS / flood rule: detect a possible TCP SYN flood.
 
-HOW IT WORKS
-    A SYN flood sends a very large number of connection requests (SYN packets) at ONE service and
-    never finishes the handshake, so the server keeps half-open connections in memory.
-    A port scan also sends many SYNs - but to MANY DIFFERENT PORTS, so we group SYNs by the
-    service being hit (destination IP + destination port) and count within a short time window.
-    Finally we check whether the connections were actually completed: if most were, it looks like
-    busy-but-ordinary traffic (or a brute-force tool), not a half-open flood.
+THE IDEA
+    A SYN flood sends a huge number of connection requests (SYN packets) at ONE service and never finishes the
+    handshake, so the server fills up with half-open connections.
+    A port scan also sends many SYNs - but to MANY DIFFERENT PORTS. So we group SYNs by the service being hit
+    (destination IP + destination port) and count them inside a short sliding time window.
+    Finally we check whether the handshakes were COMPLETED. If most were, the traffic is busy-but-ordinary (or a brute-force
+    tool opening many connections) - not a half-open flood.
 
-    The rule receives the shared ``context`` (see engine/default_rules/__init__.py) and returns a
-    list of findings built with ``self.finding(...)`` (see engine/default_rules/base_rule.py).
+WHERE IT FITS
+    app.py runs this rule beside all the prebuilt rules. It receives the shared ``context`` dictionary and returns a list of
+    findings. You may read: context["packets"] (list of packet dicts, see engine/pcap_reader.py) and
+    context["index"]["syn_only"] etc. (see engine/default_rules/__init__.py).
+
+THE SHARED RULE INTERFACE (engine/default_rules/base_rule.py)
+    Your class inherits from BaseRule. Thresholds live in ``defaults`` and are available as ``self.params[...]``. Build each
+    finding with ``self.finding(...)``. Keyword arguments you will use:
+        title=, summary=, severity= ("High"/"Medium"/"Low"/"Informational"), confidence= ("High"/"Medium"/"Low"),
+        classification= ("observed" | "indicator" | "inferred"),  explanation=  (WHY it triggered, plain English),
+        evidence= [short factual strings],  stats= {numbers},  source_ips=[...], destination_ips=[...],
+        destination_ports=[...], protocol="TCP", first_seen=, last_seen= (packet timestamps), window_seconds=,
+        packet_numbers=[...], recommendation=
+    Strings are automatically scrubbed of secrets for you.
+
+HOW YOU KNOW YOU ARE DONE
+    python -m unittest tests.test_student_tasks.Task4SynFloodRule -v
+    python -m unittest tests.test_rules.SynFloodTests -v
 """
 from __future__ import annotations
 
-from collections import Counter
+from collections import Counter   # noqa: F401
 from typing import List
 
 from engine.default_rules.base_rule import BaseRule
@@ -36,88 +52,30 @@ class DDoSDetectionRule(BaseRule):
                        "(handled by the completed-handshake check, but not perfectly).")
 
     def detect(self, context: dict) -> List[dict]:
-        packets = [p for p in context.get("packets", []) if p["protocol"] == "TCP" and p["timestamp"] is not None]
-        threshold, window = self.params["syn_threshold"], self.params["window_seconds"]
+        """Return a list of findings (an empty list when nothing is found).
 
-        # 1. SYN-only packets (SYN set, ACK and RST clear), duplicates removed (same 4-tuple + sequence).
-        seen, syns = set(), []
-        for p in packets:
-            flags = p["tcp_flags"] or ""
-            if "S" in flags and "A" not in flags and "R" not in flags:
-                key = (p["source_ip"], p["source_port"], p["destination_ip"], p["destination_port"], p["tcp_seq"])
-                if key not in seen:
-                    seen.add(key)
-                    syns.append(p)
-
-        # 2. Handshake evidence: which 4-tuples got a SYN-ACK, which finished with a client ACK,
-        #    and which services ever spoke back (so we know whether the replies are even visible).
-        answered, completed, talkers = set(), set(), set()
-        for p in packets:
-            flags = p["tcp_flags"] or ""
-            talkers.add((p["source_ip"], p["source_port"]))
-            if "S" in flags and "A" in flags:
-                answered.add((p["destination_ip"], p["destination_port"], p["source_ip"], p["source_port"]))
-            elif "A" in flags and "S" not in flags and "R" not in flags:
-                completed.add((p["source_ip"], p["source_port"], p["destination_ip"], p["destination_port"]))
-
-        # 3. Group by the targeted service.
-        groups = {}
-        for p in sorted(syns, key=lambda x: (x["timestamp"], x["packet_number"])):
-            groups.setdefault((p["destination_ip"], p["destination_port"]), []).append(p)
-
-        findings = []
-        for (target, port), items in groups.items():
-            if len(items) < threshold:
-                continue
-            # 4. Sliding window (two pointers): find the busiest window.
-            left, best = 0, (0, 0)
-            for right in range(len(items)):
-                while items[right]["timestamp"] - items[left]["timestamp"] > window:
-                    left += 1
-                if right - left > best[1] - best[0]:
-                    best = (left, right)
-            burst = items[best[0]:best[1] + 1]
-            if len(burst) < threshold:
-                continue
-
-            # 5. Were the handshakes completed?
-            keys = [(p["source_ip"], p["source_port"], target, port) for p in burst]
-            answered_ratio = sum(1 for k in keys if (k[0], k[1], k[2], k[3]) in answered) / len(burst)
-            completed_ratio = sum(1 for k in keys if k in completed) / len(burst)
-            if completed_ratio >= self.params["completed_cutoff"]:
-                continue
-            visible = (target, port) in talkers
-
-            sources = Counter(p["source_ip"] for p in burst)
-            span = max(burst[-1]["timestamp"] - burst[0]["timestamp"], 1e-6)
-            if not visible:
-                confidence = "Low"
-            elif completed_ratio <= 0.1 and len(burst) >= 3 * threshold:
-                confidence = "High"
-            else:
-                confidence = "Medium"
-            kind = "single source" if len(sources) == 1 else f"distributed, {len(sources)} sources"
-            findings.append(self.finding(
-                title=f"Possible TCP SYN flood ({kind})",
-                summary=(f"{len(burst)} SYN-only packets hit {target}:{port} within {span:.1f}s "
-                         f"({len(burst) / span:.0f} per second) and {1 - completed_ratio:.0%} never completed the handshake."),
-                severity="High" if confidence == "High" else "Medium", confidence=confidence,
-                classification="inferred",
-                explanation=("A SYN flood concentrates many connection requests on one service without finishing "
-                             "the handshake. This burst was concentrated on a single destination port (unlike a port scan, "
-                             "which spreads across ports) and most connections were not completed."),
-                evidence=[f"{len(burst)} unique SYN-only packets to {target}:{port} in {span:.2f}s",
-                          f"{len(sources)} distinct source address(es); busiest sent {sources.most_common(1)[0][1]}",
-                          f"{answered_ratio:.0%} received a SYN-ACK; {completed_ratio:.0%} completed the handshake",
-                          "Server replies are visible in the capture" if visible else
-                          "No packets from the target service are visible, so the handshake outcome is unknown"],
-                stats={"syn_count": len(burst), "syn_per_second": round(len(burst) / span, 1),
-                       "distinct_sources": len(sources), "answered_ratio": round(answered_ratio, 3),
-                       "completed_ratio": round(completed_ratio, 3)},
-                source_ips=[ip for ip, _ in sources.most_common(5)], destination_ips=[target],
-                destination_ports=[port], protocol="TCP",
-                first_seen=burst[0]["timestamp"], last_seen=burst[-1]["timestamp"], window_seconds=window,
-                packet_numbers=[p["packet_number"] for p in burst],
-                recommendation=("Enable SYN cookies, rate-limit new connections per source, and filter upstream "
-                                "(firewall / provider scrubbing). Confirm impact in server and load-balancer logs.")))
-        return findings
+        TODO 1  Keep TCP packets that have a timestamp. A SYN-ONLY packet has "S" in tcp_flags but no "A" and no "R".
+                Remove duplicates: the same (source ip, source port, destination ip, destination port, tcp_seq) is ONE
+                attempt, however many times it was captured or retransmitted.
+        TODO 2  Collect handshake evidence in one pass over the TCP packets:
+                  answered  = 4-tuples that received a SYN-ACK (S and A both set) - remember the tuple from the CLIENT's view
+                  completed = 4-tuples where the client later sent an ACK (A set, no S, no R)
+                  talkers   = (ip, port) pairs that ever SENT a packet (tells you whether the server's replies are visible)
+        TODO 3  Group the SYN-only packets by (destination_ip, destination_port), each group sorted by timestamp.
+                Skip groups smaller than self.params["syn_threshold"].
+        TODO 4  Sliding window with two pointers (left, right): move ``left`` forward while
+                timestamp[right] - timestamp[left] > self.params["window_seconds"]. Remember the window with the most packets.
+                If that busiest window holds fewer than syn_threshold packets, skip the group.
+        TODO 5  completed_ratio = share of the window's SYNs whose 4-tuple is in ``completed``;
+                answered_ratio similarly. If completed_ratio >= self.params["completed_cutoff"] -> NOT a half-open flood: skip.
+        TODO 6  Work out sources (Counter of source_ip), the time span (avoid dividing by zero), and whether the server's replies
+                are visible. Confidence:  "Low" if replies are not visible;  "High" if completed_ratio <= 0.1 and the window has
+                >= 3 x syn_threshold SYNs;  otherwise "Medium".  Severity: "High" when confidence is "High", else "Medium".
+        TODO 7  Create the finding with self.finding(...): classification "inferred", a title that says "single source" or
+                "distributed, N sources", a summary with the SYN count / rate / share that never completed, an explanation,
+                four evidence lines (counts, sources, answered/completed ratios, whether server replies are visible),
+                stats {"syn_count", "syn_per_second", "distinct_sources", "answered_ratio", "completed_ratio"},
+                the first/last timestamps of the window, the packet numbers, and a defensive recommendation
+                (SYN cookies, per-source rate limits, upstream filtering).
+        """
+        raise NotImplementedError("TODO (Task 4): implement DDoSDetectionRule.detect() in engine/ddos_rule.py")
